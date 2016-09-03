@@ -6,20 +6,22 @@ import java.time.LocalDateTime
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.routing.RoundRobinPool
-import akka.stream.{ActorMaterializer, ThrottleMode}
 import akka.stream.actor.ActorPublisher
-import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, RunnableGraph, Sink, Source}
+import akka.stream.{ActorMaterializer, ClosedShape, ThrottleMode}
 import com.typesafe.scalalogging.StrictLogging
-import meetup.streams.ex2.exchange.OrderSource.generateRandomOrder
+import meetup.streams.ex2.exchange.Common._
+import meetup.streams.ex2.exchange.OrderExecutor.PartialFills
+import meetup.streams.ex2.exchange.OrderSourceStub.generateRandomOrder
 import meetup.streams.ex2.exchange.actor.{OrderGateway, OrderLogger}
 import meetup.streams.ex2.exchange.dal.IOrderDao
 import meetup.streams.ex2.exchange.om.{ExecutedQuantity, _}
 
 import scala.collection.immutable.Iterable
-import scala.util.Random
 import scala.concurrent.duration._
+import scala.util.Random
 
-object StockExchange extends App {
+object Common {
   implicit val system = ActorSystem("StockExchange")
   implicit val materializer = ActorMaterializer()
 
@@ -28,14 +30,38 @@ object StockExchange extends App {
 
   val orderGateway = system.actorOf(Props[OrderGateway])
   val gatewayPublisher = ActorPublisher[Order](orderGateway)
+}
 
+object StockExchangeGraph extends App {
+  val g = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
+    import akka.stream.scaladsl.GraphDSL.Implicits._
+
+    val bcast = b.add(Broadcast[PartialFills](2))
+
+    Source.fromPublisher(gatewayPublisher)
+      .via(OrderIdGenerator())
+      .via(OrderPersistence(orderDao))
+      .via(OrderProcessor())
+      .via(OrderExecutor()) ~> bcast.in
+
+    bcast.out(0) ~> Flow[PartialFills].mapConcat(_.toList) ~>  Sink.foreach[ExecutedQuantity](eq => println(eq.executionDate))
+    bcast.out(1) ~> Sink.actorSubscriber(orderLogger)
+
+    ClosedShape
+  })
+  g.run()
+
+  1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
+}
+
+object StockExchange extends App {
   //OrderSource()
   Source.fromPublisher(gatewayPublisher)
     .via(OrderIdGenerator())
     .via(OrderPersistence(orderDao))
     .via(OrderProcessor())
     .via(OrderExecutor())
-    .throttle(1, 1.second, 1, ThrottleMode.shaping)
+    //.throttle(1, 1.second, 1, ThrottleMode.shaping)
     .runWith(Sink.actorSubscriber(orderLogger))
 
   1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
@@ -81,7 +107,7 @@ object OrderIdGenerator {
   }
 }
 
-object OrderSource extends StrictLogging {
+object OrderSourceStub extends StrictLogging {
   val symbols = Array("APPL", "GOOG", "IBM", "YAH")
 
   def generateRandomOrder = new Order(
