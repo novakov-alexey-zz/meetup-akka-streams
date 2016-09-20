@@ -9,7 +9,8 @@ import scala.collection.mutable
 
 class OrderGateway extends ActorPublisher[Order] {
   val log = Logging(context.system, this)
-  var queue = mutable.Queue[Order]()
+  val queue = mutable.Queue[Order]()
+  var published = 0
 
   override def receive = {
     case o: Order =>
@@ -17,14 +18,18 @@ class OrderGateway extends ActorPublisher[Order] {
       publishIfNeeded()
     case Request(cnt) =>
       publishIfNeeded()
-      log.info(s"requested $cnt")
-    case Cancel => context.stop(self)
+      log.info(s"requested: $cnt")
+    case Cancel =>
+      log.warning("received Cancel message, going to Complete the Stream!")
+      context.stop(self)
     case _ =>
   }
 
   def publishIfNeeded() = {
     while (queue.nonEmpty && isActive && totalDemand > 0) {
       onNext(queue.dequeue())
+      published += 1
+      if (published == 100) onComplete()
     }
   }
 }
