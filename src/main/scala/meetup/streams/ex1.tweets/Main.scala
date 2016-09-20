@@ -30,7 +30,7 @@ object Main extends App {
     Http().singleRequest(httpRequest).map { response =>
       response.status match {
         case OK =>
-          response.entity.dataBytes
+          response.entity.dataBytes // Source
             .scan("")((acc, curr) => if (acc.contains("\r\n")) curr.utf8String else acc + curr.utf8String)
             .filter(s => {
               s.trim.nonEmpty && s.contains("\r\n")

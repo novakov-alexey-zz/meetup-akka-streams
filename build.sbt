@@ -10,8 +10,8 @@ val loggingScala    = "com.typesafe.scala-logging"  %% "scala-logging"          
 val loggingLogback  = "ch.qos.logback"              %  "logback-classic"                % logbackVersion
 
 libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-stream" % "2.4.9",
-  "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9",
+  "com.typesafe.akka" %% "akka-stream" % "2.4.10",
+  "com.typesafe.akka" %% "akka-http-experimental" % "2.4.10",
   "org.json4s" %% "json4s-native" % "3.3.0",
   "com.hunorkovacs" %% "koauth" % "1.1.0",
   "mysql" % "mysql-connector-java" % "5.1.16",
@@ -20,3 +20,5 @@ libraryDependencies ++= Seq(
   loggingScala,
   loggingLogback
 )
+
+addCompilerPlugin("org.psywerx.hairyfotr" %% "linter" % "0.1.15")

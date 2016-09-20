@@ -5,10 +5,9 @@ import java.time.LocalDateTime
 
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
-import akka.routing.RoundRobinPool
 import akka.stream.actor.ActorPublisher
-import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, RunnableGraph, Sink, Source}
-import akka.stream.{ActorMaterializer, ClosedShape, ThrottleMode}
+import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
+import akka.stream.{ActorMaterializer, ClosedShape}
 import com.typesafe.scalalogging.StrictLogging
 import meetup.streams.ex2.exchange.Common._
 import meetup.streams.ex2.exchange.OrderExecutor.PartialFills
@@ -18,24 +17,48 @@ import meetup.streams.ex2.exchange.dal.IOrderDao
 import meetup.streams.ex2.exchange.om.{ExecutedQuantity, _}
 
 import scala.collection.immutable.Iterable
-import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Random
 
+/*
+TODO: broadcasting with materialization
+TODO: OrderLogger with pool of loggers
+ */
 object Common {
   implicit val system = ActorSystem("StockExchange")
   implicit val materializer = ActorMaterializer()
 
   val orderDao = Config.injector.getInstance(classOf[IOrderDao])
-  val orderLogger = RoundRobinPool(nrOfInstances = 1).props(Props(classOf[OrderLogger], orderDao))
+  val orderLogger = Props(classOf[OrderLogger], orderDao)
 
   val orderGateway = system.actorOf(Props[OrderGateway])
   val gatewayPublisher = ActorPublisher[Order](orderGateway)
 }
 
+
+object StockExchangeWithMat extends App with StrictLogging {
+  val count = Flow[PartialFills].map(_.length)
+  val sumSink = Sink.fold[Int, Int](0)(_ + _)
+
+  val sum = Source.fromPublisher(gatewayPublisher)
+    //OrderSourceStub()
+    .via(OrderIdGenerator())
+    .via(OrderPersistence(orderDao))
+    .via(OrderProcessor())
+    .via(OrderExecutor())
+    .via(count)
+    .toMat(sumSink)(Keep.right)
+    .run()
+
+  sum.foreach(s => logger.info(s"sum is = $s"))
+  sum.failed.foreach(s => logger.error(s"something went wrong = $s"))
+
+  1 to 100 foreach { _ => orderGateway ! generateRandomOrder }
+}
+
 object StockExchangeGraph extends App {
   val g = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
     import akka.stream.scaladsl.GraphDSL.Implicits._
-
     val bcast = b.add(Broadcast[PartialFills](2))
 
     Source.fromPublisher(gatewayPublisher)
@@ -44,10 +67,13 @@ object StockExchangeGraph extends App {
       .via(OrderProcessor())
       .via(OrderExecutor()) ~> bcast.in
 
-    bcast.out(0) ~> Flow[PartialFills].mapConcat(_.toList) ~>  Sink.foreach[ExecutedQuantity](eq => println(eq.executionDate))
-    bcast.out(1) ~> Sink.actorSubscriber(orderLogger)
+    val concat = Flow[PartialFills].mapConcat(_.toList)
+    val printDate = Sink.foreach[ExecutedQuantity](eq => println(eq.executionDate))
+    val logOrder = Sink.actorSubscriber(orderLogger)
 
-    ClosedShape
+    bcast.out(0) ~> concat ~> printDate
+    bcast.out(1) ~> logOrder
+    ClosedShape // will throw an execption if it is not really closed graph
   })
   g.run()
 
@@ -55,7 +81,7 @@ object StockExchangeGraph extends App {
 }
 
 object StockExchange extends App {
-  //OrderSource()
+  //OrderSourceStub()
   Source.fromPublisher(gatewayPublisher)
     .via(OrderIdGenerator())
     .via(OrderPersistence(orderDao))
@@ -64,6 +90,7 @@ object StockExchange extends App {
     //.throttle(1, 1.second, 1, ThrottleMode.shaping)
     .runWith(Sink.actorSubscriber(orderLogger))
 
+  // send orders to publisher actor
   1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
 }
 
@@ -114,7 +141,7 @@ object OrderSourceStub extends StrictLogging {
     OrderType(Random.nextInt(OrderType.values.size)),
     BigDecimal.valueOf(Random.nextDouble * 100),
     symbols(Random.nextInt(symbols.length)),
-    Math.abs(Random.nextInt),
+    Math.abs(Random.nextInt(Int.MaxValue)),
     Math.abs(100 + Random.nextInt(500)))
 
 
@@ -125,8 +152,8 @@ object OrderSourceStub extends StrictLogging {
       override def iterator: Iterator[Order] = new Iterator[Order]() {
         override def hasNext: Boolean = {
           counter += 1
-          logger.error("counter = " + counter)
-          true
+          logger.info("counter = " + counter)
+          counter < 100
         }
 
         override def next(): Order = generateRandomOrder
