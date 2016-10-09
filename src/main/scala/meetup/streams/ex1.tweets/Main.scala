@@ -20,7 +20,7 @@ object Main extends App {
   implicit val formats = DefaultFormats
 
   val conf = ConfigFactory.load()
-  val body = "track=FX"
+  val body = "track=Sunday"
 
   val oAuthHeader = OAuthHeader(conf, body)
   oAuthHeader.foreach { header =>
