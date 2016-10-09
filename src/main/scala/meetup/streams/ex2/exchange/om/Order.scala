@@ -27,3 +27,5 @@ case class ExecutedQuantity(orderId: Long, quantity: Int, executionDate: LocalDa
 case class ExecutionAck(orderId: Long, quantity: Int, executionId: Long)
 
 case class AllAcksReceived(replies: Seq[ExecutionAck])
+
+case class PartialFills(seq: Seq[ExecutedQuantity] = Nil)

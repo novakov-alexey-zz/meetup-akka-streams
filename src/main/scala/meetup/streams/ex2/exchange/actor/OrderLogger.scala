@@ -3,9 +3,8 @@ package meetup.streams.ex2.exchange.actor
 import akka.event.Logging
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnError, OnNext}
 import akka.stream.actor.{ActorSubscriber, RequestStrategy, WatermarkRequestStrategy}
-import meetup.streams.ex2.exchange.OrderExecutor.PartialFills
 import meetup.streams.ex2.exchange.dal.IOrderDao
-import meetup.streams.ex2.exchange.om.{ExecutedQuantity, Execution}
+import meetup.streams.ex2.exchange.om.{ExecutedQuantity, Execution, PartialFills}
 
 import scala.collection.mutable.ListBuffer
 
@@ -17,9 +16,9 @@ class OrderLogger(orderDao: IOrderDao) extends ActorSubscriber {
 
   override def receive = {
     case OnNext(e: PartialFills) =>
-      queue ++= e
+      queue ++= e.seq
       log.warning("queue size = {}", queue.length)
-      e.foreach(q => self ! q)
+      e.seq.foreach(q => self ! q)
     case eq: ExecutedQuantity =>
       orderDao.insertExecution(Execution(eq.orderId, eq.quantity, eq.executionDate))
       queue -= eq

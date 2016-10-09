@@ -10,7 +10,6 @@ import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Keep, RunnableGraph, Sin
 import akka.stream.{ActorMaterializer, ClosedShape}
 import com.typesafe.scalalogging.StrictLogging
 import meetup.streams.ex2.exchange.Common._
-import meetup.streams.ex2.exchange.OrderExecutor.PartialFills
 import meetup.streams.ex2.exchange.OrderSourceStub.generateRandomOrder
 import meetup.streams.ex2.exchange.actor.{OrderGateway, OrderLogger}
 import meetup.streams.ex2.exchange.dal.IOrderDao
@@ -37,7 +36,7 @@ object Common {
 
 
 object StockExchangeWithMat extends App with StrictLogging {
-  val count = Flow[PartialFills].map(_.length)
+  val count = Flow[PartialFills].map(_.seq.length)
   val sumSink = Sink.fold[Int, Int](0)(_ + _)
 
   val sum = Source.fromPublisher(gatewayPublisher)
@@ -67,7 +66,7 @@ object StockExchangeGraph extends App {
       .via(OrderProcessor())
       .via(OrderExecutor()) ~> bcast.in
 
-    val concat = Flow[PartialFills].mapConcat(_.toList)
+    val concat = Flow[PartialFills].mapConcat(_.seq.toList)
     val printDate = Sink.foreach[ExecutedQuantity](eq => println(eq.executionDate))
     val logOrder = Sink.actorSubscriber(orderLogger)
 
@@ -100,7 +99,6 @@ object OrderProcessor {
 }
 
 object OrderExecutor extends StrictLogging {
-  type PartialFills = Seq[ExecutedQuantity]
   val execQuantity = 3
 
   def apply(): Flow[ExecuteOrder, PartialFills, NotUsed] = Flow.fromFunction(o => execute(o))
@@ -109,9 +107,9 @@ object OrderExecutor extends StrictLogging {
     logger.info("Going to execute next order = {}", eo)
 
     val quantities = Seq.fill(execQuantity)(Random.nextInt(eo.quantity / execQuantity))
-    quantities.map { q =>
+    PartialFills(quantities.map { q =>
       ExecutedQuantity(eo.orderId, q, LocalDateTime.now)
-    }
+    })
   }
 }
 
