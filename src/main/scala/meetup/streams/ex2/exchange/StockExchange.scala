@@ -34,8 +34,34 @@ object Common {
   val gatewayPublisher = ActorPublisher[Order](orderGateway)
 }
 
+object StockExchangeGraphMat extends App {
+  val source = Source.fromPublisher(gatewayPublisher)
+    .via(OrderIdGenerator())
+    .via(OrderPersistence(orderDao))
+    .via(OrderProcessor())
+    .via(OrderExecutor())
 
-object StockExchangeWithMat extends App with StrictLogging {
+  val concatFlow = Flow[PartialFills].mapConcat(_.seq.toList)
+  val printDate = Sink.fold[String, ExecutedQuantity]("")((s, eq) => s + eq.executionDate + " ")
+  val logOrder = Sink.actorSubscriber(orderLogger)
+
+  val (f, actor) = RunnableGraph.fromGraph(GraphDSL.create(printDate, logOrder)((_, _)) { implicit builder =>
+    (pDate, lOrder) =>
+      import akka.stream.scaladsl.GraphDSL.Implicits._
+      val broadcast = builder.add(Broadcast[PartialFills](2))
+
+      source ~> broadcast.in
+      broadcast.out(0) ~> concatFlow ~> pDate // replace with fold of string
+      broadcast.out(1) ~> lOrder
+      ClosedShape
+  }).run
+
+  1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
+
+  f.foreach(r => println(s"Done >>>>> \n$r"))
+}
+
+object StockExchangeMat extends App with StrictLogging {
   val count = Flow[PartialFills].map(_.seq.length)
   val sumSink = Sink.fold[Int, Int](0)(_ + _)
 
@@ -72,7 +98,7 @@ object StockExchangeGraph extends App {
 
     bcast.out(0) ~> concat ~> printDate
     bcast.out(1) ~> logOrder
-    ClosedShape // will throw an execption if it is not really closed graph
+    ClosedShape // will throw an exception if it is not really closed graph
   })
   g.run()
 
