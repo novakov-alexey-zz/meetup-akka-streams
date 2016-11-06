@@ -6,7 +6,7 @@ import java.time.LocalDateTime
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.stream.actor.ActorPublisher
-import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
+import akka.stream.scaladsl.{Balance, Broadcast, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import akka.stream.{ActorMaterializer, ClosedShape}
 import com.typesafe.scalalogging.StrictLogging
 import meetup.streams.ex2.exchange.Common._
@@ -20,8 +20,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Random
 
 /*
-TODO: broadcasting with materialization
-TODO: OrderLogger with pool of loggers
+Todo for Slides: finite and infinite streams
  */
 object Common {
   implicit val system = ActorSystem("StockExchange")
@@ -32,6 +31,29 @@ object Common {
 
   val orderGateway = system.actorOf(Props[OrderGateway])
   val gatewayPublisher = ActorPublisher[Order](orderGateway)
+}
+
+object StockExchangeGraphPool extends App {
+  val workers = 5
+
+  val g = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
+    import akka.stream.scaladsl.GraphDSL.Implicits._
+    val bcast = b.add(Balance[PartialFills](workers))
+
+    Source.fromPublisher(gatewayPublisher)
+      .via(OrderIdGenerator())
+      .via(OrderPersistence(orderDao))
+      .via(OrderProcessor())
+      .via(OrderExecutor()) ~> bcast.in
+
+    for (i <- 0 until workers)
+      bcast.out(i) ~> Sink.actorSubscriber(orderLogger).named(s"ol-$i")
+
+    ClosedShape // will throw an exception if it is not really closed graph
+  })
+  g.run()
+
+  1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
 }
 
 object StockExchangeGraphMat extends App {
@@ -45,7 +67,7 @@ object StockExchangeGraphMat extends App {
   val printDate = Sink.fold[String, ExecutedQuantity]("")((s, eq) => s + eq.executionDate + " ")
   val logOrder = Sink.actorSubscriber(orderLogger)
 
-  val (f, actor) = RunnableGraph.fromGraph(GraphDSL.create(printDate, logOrder)((_, _)) { implicit builder =>
+  val (dates, actor) = RunnableGraph.fromGraph(GraphDSL.create(printDate, logOrder)((_, _)) { implicit builder =>
     (pDate, lOrder) =>
       import akka.stream.scaladsl.GraphDSL.Implicits._
       val broadcast = builder.add(Broadcast[PartialFills](2))
@@ -58,7 +80,7 @@ object StockExchangeGraphMat extends App {
 
   1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
 
-  f.foreach(r => println(s"Done >>>>> \n$r"))
+  dates.foreach(r => println(s"Done >>>>> \n$r"))
 }
 
 object StockExchangeMat extends App with StrictLogging {
