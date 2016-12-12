@@ -1,4 +1,4 @@
-package meetup.streams.example1.tweets.om
+package meetup.streams.ex1.tweets.om
 
 case class Tweet(
                   annotations: AnyRef,
