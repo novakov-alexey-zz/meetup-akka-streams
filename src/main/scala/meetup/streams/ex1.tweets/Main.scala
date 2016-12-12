@@ -7,7 +7,7 @@ import akka.http.scaladsl.model.StatusCodes.OK
 import akka.http.scaladsl.model._
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
-import meetup.streams.example1.tweets.om.Tweet
+import meetup.streams.ex1.tweets.om.Tweet
 import org.json4s._
 import org.json4s.native.JsonMethods._
 
