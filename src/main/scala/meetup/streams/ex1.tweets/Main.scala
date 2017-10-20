@@ -15,19 +15,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success, Try}
 
 object Main extends App {
-  implicit val system = ActorSystem()
-  implicit val materializer = ActorMaterializer()
-  implicit val formats = DefaultFormats
+  implicit val system: ActorSystem = ActorSystem()
+  implicit val materializer: ActorMaterializer = ActorMaterializer()
+  implicit val formats: DefaultFormats.type = DefaultFormats
 
   val conf = ConfigFactory.load()
-  val body = "track=Sunday"
+  val body = "track=music"
 
   val oAuthHeader = OAuthHeader(conf, body)
-  oAuthHeader.foreach { header =>
+  val httpRequest = oAuthHeader.map { header =>
     val source = Uri(conf.getString("twitter.url"))
-    val httpRequest = createHttpRequest(header, source)
-
-    Http().singleRequest(httpRequest).map { response =>
+    createHttpRequest(header, source)
+  }
+  httpRequest.foreach { r =>
+    Http().singleRequest(r).map { response =>
       response.status match {
         case OK =>
           // Stream begins
@@ -41,13 +42,17 @@ object Main extends App {
               case Success(tweet) => println("----\n" + tweet.text)
               case Failure(e) => println("-----\n" + e.getMessage)
             }
-          // Stream ends
+        // Stream ends
         case _ => println(response.entity.dataBytes.runForeach(_.utf8String))
       }
     }
   }
+
   oAuthHeader.failed.foreach { e => println(e.getMessage) }
 
+  /*
+    See more details at twitter Streaming API
+   */
   def createHttpRequest(header: String, source: Uri): HttpRequest = {
     val httpHeaders = List(
       HttpHeader.parse("Authorization", header) match {

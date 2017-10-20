@@ -10,7 +10,7 @@ import scala.collection.mutable.ListBuffer
 
 class OrderLogger(orderDao: IOrderDao) extends ActorSubscriber {
   val log = Logging(context.system, this)
-  val queue = ListBuffer[ExecutedQuantity]()
+  private val queue = ListBuffer[ExecutedQuantity]()
 
   override protected def requestStrategy: RequestStrategy = new WatermarkRequestStrategy(highWatermark = 10, lowWatermark = 5)
 
