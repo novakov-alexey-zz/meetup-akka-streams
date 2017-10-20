@@ -4,7 +4,7 @@ import java.math.BigDecimal
 import java.time.LocalDateTime
 
 import akka.NotUsed
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.actor.ActorPublisher
 import akka.stream.scaladsl.{Balance, Broadcast, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import akka.stream.{ActorMaterializer, ClosedShape}
@@ -14,6 +14,7 @@ import meetup.streams.ex2.exchange.OrderSourceStub.generateRandomOrder
 import meetup.streams.ex2.exchange.actor.{OrderGateway, OrderLogger}
 import meetup.streams.ex2.exchange.dal.IOrderDao
 import meetup.streams.ex2.exchange.om.{ExecutedQuantity, _}
+import org.reactivestreams.Publisher
 
 import scala.collection.immutable.Iterable
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -23,14 +24,14 @@ import scala.util.Random
 Todo for Slides: finite and infinite streams
  */
 object Common {
-  implicit val system = ActorSystem("StockExchange")
-  implicit val materializer = ActorMaterializer()
+  implicit val system: ActorSystem = ActorSystem("StockExchange")
+  implicit val materializer: ActorMaterializer = ActorMaterializer()
 
-  val orderDao = Config.injector.getInstance(classOf[IOrderDao])
+  val orderDao: IOrderDao = Config.injector.getInstance(classOf[IOrderDao])
   val orderLogger = Props(classOf[OrderLogger], orderDao)
 
-  val orderGateway = system.actorOf(Props[OrderGateway])
-  val gatewayPublisher = ActorPublisher[Order](orderGateway)
+  val orderGateway: ActorRef = system.actorOf(Props[OrderGateway])
+  val gatewayPublisher: Publisher[Order] = ActorPublisher[Order](orderGateway)
 }
 
 object StockExchangeGraphPool extends App {

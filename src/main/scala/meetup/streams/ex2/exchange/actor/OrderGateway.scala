@@ -9,7 +9,7 @@ import scala.collection.mutable
 
 class OrderGateway extends ActorPublisher[Order] {
   val log = Logging(context.system, this)
-  val queue = mutable.Queue[Order]()
+  private val queue = mutable.Queue[Order]()
   var published = 0
 
   override def receive = {
