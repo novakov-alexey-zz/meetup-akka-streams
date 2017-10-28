@@ -1,28 +1,13 @@
 package meetup.streams.ex1.tweets
 
 import akka.actor.ActorSystem
-import com.hunorkovacs.koauth.domain.KoauthRequest
-import com.hunorkovacs.koauth.service.consumer.DefaultConsumerService
+import cloud.drdrdr.oauth._
 import com.typesafe.config.Config
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
-
 object OAuthHeader {
-  def apply(conf: Config, reqBody: String)(implicit system: ActorSystem): Future[String] = {
-    val consumer = new DefaultConsumerService(system.dispatcher)
-
-    consumer.createOauthenticatedRequest(
-      KoauthRequest(
-        method = "POST",
-        url = conf.getString("twitter.url"),
-        authorizationHeader = None,
-        body = Some(reqBody)
-      ),
-      conf.getString("twitter.consumerKey"),
-      conf.getString("twitter.consumerSecret"),
-      conf.getString("twitter.accessToken"),
-      conf.getString("twitter.accessTokenSecret")
-    ) map (_.header)
+  def apply(conf: Config, params: Map[String, String])(implicit system: ActorSystem): String = {
+    val oauth = new Oauth(key = conf.getString("twitter.consumerKey"), secret = conf.getString("twitter.consumerSecret"))
+    oauth.setAccessTokens(conf.getString("twitter.accessToken"), conf.getString("twitter.accessTokenSecret"))
+    oauth.getSignedHeader(conf.getString("twitter.url"), "POST", params)
   }
 }
