@@ -20,35 +20,30 @@ object Main extends App {
   implicit val formats: DefaultFormats.type = DefaultFormats
 
   val conf = ConfigFactory.load()
-  val body = "track=music"
+  val body = Map("track" -> "Ukraine")
 
   val oAuthHeader = OAuthHeader(conf, body)
-  val httpRequest = oAuthHeader.map { header =>
-    val source = Uri(conf.getString("twitter.url"))
-    createHttpRequest(header, source)
-  }
-  httpRequest.foreach { r =>
-    Http().singleRequest(r).map { response =>
-      response.status match {
-        case OK =>
-          // Stream begins
-          response.entity.dataBytes // Source
-            .scan("")((acc, curr) => if (acc.contains("\r\n")) curr.utf8String else acc + curr.utf8String)
-            .filter(s => {
-              s.trim.nonEmpty && s.contains("\r\n")
-            })
-            .map(json => Try(parse(json).extract[Tweet]))
-            .runForeach {
-              case Success(tweet) => println("----\n" + tweet.text)
-              case Failure(e) => println("-----\n" + e.getMessage)
-            }
-        // Stream ends
-        case _ => println(response.entity.dataBytes.runForeach(_.utf8String))
-      }
+  val source = Uri(conf.getString("twitter.url"))
+  val httpRequest = createHttpRequest(oAuthHeader, source)
+
+  Http().singleRequest(httpRequest).map { response =>
+    response.status match {
+      case OK =>
+        // Stream begins
+        response.entity.dataBytes // Source
+          .scan("")((acc, curr) => if (acc.contains("\r\n")) curr.utf8String else acc + curr.utf8String)
+          .filter(s =>
+            s.trim.nonEmpty && s.contains("\r\n")
+          )
+          .map(json => Try(parse(json).extract[Tweet]))
+          .runForeach {
+            case Success(tweet) => println("----\n" + tweet.text)
+            case Failure(e) => println("-----\n" + e.getMessage)
+          }
+      // Stream ends
+      case _ => println(response.entity.dataBytes.runForeach(_.utf8String))
     }
   }
-
-  oAuthHeader.failed.foreach { e => println(e.getMessage) }
 
   /*
     See more details at twitter Streaming API
@@ -71,7 +66,8 @@ object Main extends App {
       headers = httpHeaders,
       entity = HttpEntity(
         contentType = ContentType(MediaTypes.`application/x-www-form-urlencoded`, HttpCharsets.`UTF-8`),
-        string = body)
+        string = body.map { case (k, v) => k + "=" + v }.mkString(",")
+      )
     )
   }
 }
