@@ -14,7 +14,6 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "10.0.10",
   "org.json4s" %% "json4s-native" % "3.5.0",
   "mysql" % "mysql-connector-java" % "5.1.16",
-  //  "org.mybatis.scala" % "mybatis-scala-core_2.11" % "1.0.3",
   "org.scalikejdbc" %% "scalikejdbc" % "3.1.0",
   "com.google.inject" % "guice" % "4.0",
   "cloud.drdrdr" %% "oauth-headers" % "0.3",

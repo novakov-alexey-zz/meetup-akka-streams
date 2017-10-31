@@ -18,9 +18,11 @@ class OrderProcessorModule extends AbstractModule {
         connectionTimeoutMillis = 3000L,
         validationQuery = "select 1 from dual")
 
-      ConnectionPool.add("orders",
+      val connectionPoolName = "orders"
+
+      ConnectionPool.add(connectionPoolName,
         "jdbc:mysql://localhost:3306/somedb?autoReconnect=true&amp;useSSL=false", "root", "root", settings)
 
-      new OrderDaoImpl("orders")
+      new OrderDaoImpl(connectionPoolName)
     }
 }
