@@ -30,7 +30,9 @@ class OrderGateway extends ActorPublisher[Order] {
 
   private def publishIfNeeded(): Unit = {
     while (queue.nonEmpty && isActive && totalDemand > 0) {
-      onNext(queue.dequeue())
+      val order = queue.dequeue
+      log.debug(s"publish new order to the stream $order")
+      onNext(order)
       published += 1
       if (published == 100) onComplete()
     }
