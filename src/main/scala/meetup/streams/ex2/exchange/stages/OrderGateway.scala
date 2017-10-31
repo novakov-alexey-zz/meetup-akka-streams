@@ -46,7 +46,7 @@ class OrderGatewayShape extends GraphStage[FlowShape[Order, Order]] with StrictL
   val queueSize = 100
 
   override def createLogic(inheritedAttributes: Attributes) = new GraphStageLogic(shape) {
-    var published = 0
+    // just for the demo purpose of this Stage, we accumulate message in memory queue and push them all upon queueSize is reached
     val queue = mutable.Queue[Order]()
 
     setHandler(in, new InHandler {

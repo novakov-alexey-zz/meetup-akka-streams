@@ -7,7 +7,7 @@ import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.actor.ActorPublisher
 import akka.stream.scaladsl.{Balance, Broadcast, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
-import akka.stream.{ActorMaterializer, ClosedShape, OverflowStrategy}
+import akka.stream.{ActorMaterializer, ClosedShape}
 import com.typesafe.scalalogging.StrictLogging
 import meetup.streams.ex2.exchange.Common._
 import meetup.streams.ex2.exchange.OrderSourceStub.generateRandomOrder
@@ -139,7 +139,7 @@ object StockExchange extends App {
     //.throttle(1, 1.second, 1, ThrottleMode.shaping)
     .runWith(Sink.fromGraph(orderLoggerStage))
 
-  // send orders to publisher actor
+  // send orders to publisher stage
   1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
 }
 
