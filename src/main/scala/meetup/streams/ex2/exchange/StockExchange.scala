@@ -49,7 +49,7 @@ object StockExchangeGraphPool extends App {
       .via(OrderExecutor()) ~> bcast.in
 
     for (i <- 0 until workers)
-      bcast.out(i) ~> Sink.actorSubscriber(orderLogger).named(s"ol-$i")
+      bcast.out(i) ~> Sink.fromGraph(orderLoggerStage).named(s"ol-$i")
 
     ClosedShape // will throw an exception if it is not really closed graph
   })
@@ -67,7 +67,7 @@ object StockExchangeGraphMat extends App {
 
   val concatFlow = Flow[PartialFills].mapConcat(_.seq.toList)
   val printDate = Sink.fold[String, ExecutedQuantity]("")((s, eq) => s + eq.executionDate + " ")
-  val logOrder = Sink.actorSubscriber(orderLogger)
+  val logOrder = Sink.fromGraph(orderLoggerStage)
 
   val (dates, actor) = RunnableGraph.fromGraph(GraphDSL.create(printDate, logOrder)((_, _)) { implicit builder =>
     (pDate, lOrder) =>
@@ -118,7 +118,7 @@ object StockExchangeGraph extends App {
 
     val concat = Flow[PartialFills].mapConcat(_.seq.toList)
     val printDate = Sink.foreach[ExecutedQuantity](eq => println(eq.executionDate))
-    val logOrder = Sink.actorSubscriber(orderLogger)
+    val logOrder = Sink.fromGraph(orderLoggerStage)
 
     bcast.out(0) ~> concat ~> printDate
     bcast.out(1) ~> logOrder
@@ -137,7 +137,7 @@ object StockExchange extends App {
     .via(OrderProcessor())
     .via(OrderExecutor())
     //.throttle(1, 1.second, 1, ThrottleMode.shaping)
-    .runWith(Sink.actorSubscriber(orderLogger))
+    .runWith(Sink.fromGraph(orderLoggerStage))
 
   // send orders to publisher actor
   1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }

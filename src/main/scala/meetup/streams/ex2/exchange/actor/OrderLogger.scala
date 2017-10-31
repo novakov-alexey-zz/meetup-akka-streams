@@ -33,19 +33,26 @@ class OrderLogger(orderDao: OrderDao) extends ActorSubscriber {
 }
 
 class OrderLoggerStage(orderDao: OrderDao) extends GraphStage[SinkShape[PartialFills]] with StrictLogging {
-  val in = Inlet[PartialFills]("OrderLoggerStage.in")
+  private val in = Inlet[PartialFills]("OrderLoggerStage.in")
   val shape: SinkShape[PartialFills] = SinkShape.of(in)
 
-  override def createLogic(inheritedAttributes: Attributes) = new GraphStageLogic(shape) {
+  override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
+    override def preStart(): Unit = {
+      // a detached stage needs to start upstream demand
+      // itself as it is not triggered by downstream demand
+      pull(in)
+    }
 
     setHandler(in, new InHandler {
       override def onPush(): Unit = {
         val executions = grab(in).seq
+        logger.info(s"logging executions to db: ${executions.length}")
 
         executions.foreach { e =>
           orderDao.insertExecution(Execution(e.orderId, e.quantity, e.executionDate))
           logger.info("saved execution = {}", e)
         }
+        pull(in)
       }
     })
   }
