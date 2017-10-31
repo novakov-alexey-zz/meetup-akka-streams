@@ -3,12 +3,15 @@ package meetup.streams.ex2.exchange.actor
 import akka.event.Logging
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnError, OnNext}
 import akka.stream.actor.{ActorSubscriber, RequestStrategy, WatermarkRequestStrategy}
-import meetup.streams.ex2.exchange.dal.IOrderDao
+import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler}
+import akka.stream.{Attributes, Inlet, SinkShape}
+import com.typesafe.scalalogging.StrictLogging
+import meetup.streams.ex2.exchange.dal.OrderDao
 import meetup.streams.ex2.exchange.om.{ExecutedQuantity, Execution, PartialFills}
 
 import scala.collection.mutable.ListBuffer
 
-class OrderLogger(orderDao: IOrderDao) extends ActorSubscriber {
+class OrderLogger(orderDao: OrderDao) extends ActorSubscriber {
   val log = Logging(context.system, this)
   private val queue = ListBuffer[ExecutedQuantity]()
 
@@ -26,5 +29,24 @@ class OrderLogger(orderDao: IOrderDao) extends ActorSubscriber {
       log.info("saved execution = {}", eq)
     case OnError(e) => log.error(e, "Received error from stream")
     case OnComplete => log.info("Stream has been completed >>>>>>>>>>>>>>>>>>>>>")
+  }
+}
+
+class OrderLoggerStage(orderDao: OrderDao) extends GraphStage[SinkShape[PartialFills]] with StrictLogging {
+  val in = Inlet[PartialFills]("OrderLoggerStage.in")
+  val shape: SinkShape[PartialFills] = SinkShape.of(in)
+
+  override def createLogic(inheritedAttributes: Attributes) = new GraphStageLogic(shape) {
+
+    setHandler(in, new InHandler {
+      override def onPush(): Unit = {
+        val executions = grab(in).seq
+
+        executions.foreach { e =>
+          orderDao.insertExecution(Execution(e.orderId, e.quantity, e.executionDate))
+          logger.info("saved execution = {}", e)
+        }
+      }
+    })
   }
 }
