@@ -7,12 +7,12 @@ import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.actor.ActorPublisher
 import akka.stream.scaladsl.{Balance, Broadcast, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
-import akka.stream.{ActorMaterializer, ClosedShape}
+import akka.stream.{ActorMaterializer, ClosedShape, OverflowStrategy}
 import com.typesafe.scalalogging.StrictLogging
 import meetup.streams.ex2.exchange.Common._
 import meetup.streams.ex2.exchange.OrderSourceStub.generateRandomOrder
-import meetup.streams.ex2.exchange.actor.{OrderGateway, OrderLogger}
-import meetup.streams.ex2.exchange.dal.IOrderDao
+import meetup.streams.ex2.exchange.actor.{OrderGateway, OrderLogger, OrderLoggerStage}
+import meetup.streams.ex2.exchange.dal.OrderDao
 import meetup.streams.ex2.exchange.om.{ExecutedQuantity, _}
 import org.reactivestreams.Publisher
 
@@ -27,8 +27,9 @@ object Common {
   implicit val system: ActorSystem = ActorSystem("StockExchange")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
 
-  val orderDao: IOrderDao = Config.injector.getInstance(classOf[IOrderDao])
+  val orderDao: OrderDao = Config.injector.getInstance(classOf[OrderDao])
   val orderLogger = Props(classOf[OrderLogger], orderDao)
+  val orderLoggerStage = new OrderLoggerStage(orderDao)
 
   val orderGateway: ActorRef = system.actorOf(Props[OrderGateway])
   val gatewayPublisher: Publisher[Order] = ActorPublisher[Order](orderGateway)
@@ -163,7 +164,7 @@ object OrderExecutor extends StrictLogging {
 }
 
 object OrderPersistence {
-  def apply(orderDao: IOrderDao): Flow[PreparedOrder, LoggedOrder, NotUsed] =
+  def apply(orderDao: OrderDao): Flow[PreparedOrder, LoggedOrder, NotUsed] =
     Flow.fromFunction(p => {
       orderDao.saveOrder(new Order(p.orderId, p.order))
       LoggedOrder(p.orderId, p.order)

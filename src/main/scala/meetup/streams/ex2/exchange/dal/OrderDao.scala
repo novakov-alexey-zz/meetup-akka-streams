@@ -3,104 +3,72 @@ package meetup.streams.ex2.exchange.dal
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
-import meetup.streams.ex2.exchange.Config
-import meetup.streams.ex2.exchange.om.{Execution, Order}
 import meetup.streams.ex2.exchange.om.OrderType.OrderType
-import org.mybatis.scala.mapping.{ResultMap, _}
+import meetup.streams.ex2.exchange.om.{Execution, Order}
+import scalikejdbc._
 
-object OrderDaoMapping {
-  val completeBatch = new Update[(LocalDateTime, Long)] {
-    override def xsql =
-      """
-        UPDATE OrderLog
-        SET complete_batch_date = #{_1, typeHandler = meetup.streams.ex2.exchange.dal.LocalDateTimeTypeHandler}
-        WHERE orderid <= #{_2}
-      """
-  }
+case class OrderEntity(
+                        orderid: Long,
+                        executiondate: LocalDateTime,
+                        ordertype: OrderType,
+                        executionprice: BigDecimal,
+                        symbol: String,
+                        userid: Int,
+                        quantity: Int)
 
-  val selectOrders = new SelectList[OrderEntity] {
-    resultMap = new ResultMap[OrderEntity] {
-      id(property = "orderId", column = "orderId")
-      result(property = "executionDate", column = "executionDate", typeHandler = T[LocalDateTimeTypeHandler])
-      result(property = "orderType", column = "orderType", typeHandler = T[OrderTypeEnumTypeHandler])
-      result(property = "executionPrice", column = "executionPrice")
-      result(property = "symbol", column = "symbol")
-      result(property = "userId", column = "userId")
-      result(property = "quantity", column = "quantity")
-    }
-
-    override def xsql = "SELECT * FROM OrderLog"
-  }
-
-  val saveOrder = new Insert[OrderEntity] {
-    override def xsql =
-      <xsql>
-        INSERT INTO OrderLog (orderId, executionDate, orderType, executionPrice, symbol, userId, quantity)
-        VALUES (
-        #{{orderId}},
-        #{{executionDate, typeHandler = meetup.streams.ex2.exchange.dal.LocalDateTimeTypeHandler}},
-        #{{orderType, typeHandler = meetup.streams.ex2.exchange.dal.OrderTypeEnumTypeHandler}},
-        #{{executionPrice}}, #{{symbol}}, #{{userId}}, #{{quantity}}
-        )
-      </xsql>
-  }
-
-  val insertExecution = new Insert[Execution] {
-    override def xsql =
-      <xsql>
-        INSERT INTO OrderExecution (orderId, executionDate, quantity)
-        VALUES (#{{orderId}}, #{{executionDate, typeHandler = meetup.streams.ex2.exchange.dal.LocalDateTimeTypeHandler}}, #{{quantity}})
-      </xsql>
-  }
-
-  def bind: Seq[Statement] = Seq(selectOrders, saveOrder, completeBatch, insertExecution)
+class OrderEntitySql(override val connectionPoolName: String) extends SQLSyntaxSupport[OrderEntity] {
+  override def tableName = "OrderLog"
 }
 
-class OrderEntity {
-  var orderId: Long = _
-  var executionDate: LocalDateTime = _
-  var orderType: OrderType = _
-  var executionPrice: BigDecimal = _
-  var symbol: String = _
-  var userId: Int = _
-  var quantity: Int = _
+case class ExecutionEntity(orderid: Long, quantity: Int, executiondate: LocalDateTime)
 
-  def toOrder = Order(orderId, executionDate, orderType, executionPrice, symbol, userId, quantity)
+class ExecutionEntitySql(override val connectionPoolName: String) extends SQLSyntaxSupport[ExecutionEntity] {
+  override def tableName = "OrderExecution"
 }
 
-object OrderEntity {
-  def toOrderEntity(order: Order): OrderEntity = new OrderEntity {
-    orderId = order.orderId
-    executionDate = order.executionDate
-    orderType = order.orderType
-    executionPrice = order.executionPrice
-    symbol = order.symbol
-    userId = order.userId
-    quantity = order.quantity
-  }
-}
-
-trait IOrderDao {
-  def completeBatch(upToId: Long, withDate: LocalDateTime)
-
+trait OrderDao {
   def saveOrder(order: Order)
-
-  def getOrders: Seq[Order]
 
   def insertExecution(execution: Execution)
 }
 
-class OrderDaoImpl extends IOrderDao {
-  val db = Config.persistenceContext
+class OrderDaoImpl(poolName: String) extends OrderDao {
+  implicit val orderTypeParameterBinderFactory: ParameterBinderFactory[OrderType] = ParameterBinderFactory {
+    orderType => (stmt, idx) => stmt.setString(idx, orderType.toString)
+  }
 
-  override def getOrders: Seq[Order] = db.readOnly { implicit session => OrderDaoMapping.selectOrders().map(_.toOrder) }
+  private val executionEntitySql = new ExecutionEntitySql(poolName)
+  private val eeCol = executionEntitySql.column
+  private val orderEntitySql = new OrderEntitySql(poolName)
+  private val oeCol = orderEntitySql.column
 
-  override def completeBatch(upToId: Long, withDate: LocalDateTime): Unit =
-    db.transaction { implicit session => OrderDaoMapping.completeBatch((withDate, upToId)) }
+  def db: NamedDB = NamedDB(poolName)
 
-  override def saveOrder(order: Order): Unit =
-    db.transaction { implicit session => OrderDaoMapping.saveOrder(OrderEntity.toOrderEntity(order)) }
+  override def saveOrder(order: Order): Unit = {
+    db.localTx { session =>
+      withSQL {
+        insert.into(orderEntitySql).namedValues(
+          oeCol.orderid -> order.orderId,
+          oeCol.executiondate -> order.executionDate,
+          oeCol.ordertype -> order.orderType,
+          oeCol.quantity -> order.quantity,
+          oeCol.executionprice -> order.executionPrice,
+          oeCol.symbol -> order.symbol,
+          oeCol.userid -> order.userId
+        )
+      }.update.apply()(session)
+    }
+  }
 
-  override def insertExecution(execution: Execution): Unit =
-    db.transaction { implicit session => OrderDaoMapping.insertExecution(execution) }
+  override def insertExecution(execution: Execution): Unit = {
+    db.localTx { session =>
+      withSQL {
+        insert.into(executionEntitySql).namedValues(
+          eeCol.orderid -> execution.orderId,
+          eeCol.executiondate -> execution.executionDate,
+          eeCol.quantity -> execution.quantity
+        )
+      }.update().apply()(session)
+    }
+  }
 }
