@@ -1,11 +1,12 @@
-package meetup.streams.ex2.exchange.actor
+package meetup.streams.ex2.exchange.stages
 
 import akka.event.Logging
-import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
+import akka.stream._
 import akka.stream.actor.ActorPublisher
 import akka.stream.actor.ActorPublisherMessage.{Cancel, Request}
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
+import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import com.typesafe.scalalogging.StrictLogging
+import meetup.streams.ex2.exchange.OrderSourceStub
 import meetup.streams.ex2.exchange.om.Order
 
 import scala.collection.mutable
@@ -39,30 +40,22 @@ class OrderGateway extends ActorPublisher[Order] {
   }
 }
 
-class OrderGatewayShape extends GraphStage[FlowShape[Order, Order]] with StrictLogging {
-  val in = Inlet[Order]("OrderGatewayShape.in")
-  val out = Outlet[Order]("OrderGatewayShape.out")
-  val shape = FlowShape.of(in, out)
-  val queueSize = 100
+class RandomOrderSource(limit: Int) extends GraphStage[SourceShape[Order]] with StrictLogging {
+  private val out = Outlet[Order]("RandomOrderSource.out")
+  val shape = SourceShape.of(out)
 
   override def createLogic(inheritedAttributes: Attributes) = new GraphStageLogic(shape) {
-    // just for the demo purpose of this Stage, we accumulate message in memory queue and push them all upon queueSize is reached
-    val queue = mutable.Queue[Order]()
+    var count = 0
 
-    setHandler(in, new InHandler {
-      override def onPush(): Unit = {
-        queue.enqueue(grab(in))
-
-        if (queue.length == queueSize) {
-          logger.info(s"Flushing internal message queue of $queueSize messages")
-          queue.dequeueAll(_ => true).foreach(o => push(out, o))
-        }
-        else pull(in)
-      }
-    })
     setHandler(out, new OutHandler {
       override def onPull(): Unit = {
-        pull(in)
+        if (count < limit) {
+          push(out, OrderSourceStub.generateRandomOrder)
+          count += 1
+        } else {
+          complete(out)
+          logger.info("Completing order source...")
+        }
       }
     })
   }

@@ -11,9 +11,9 @@ import akka.stream.{ActorMaterializer, ClosedShape}
 import com.typesafe.scalalogging.StrictLogging
 import meetup.streams.ex2.exchange.Common._
 import meetup.streams.ex2.exchange.OrderSourceStub.generateRandomOrder
-import meetup.streams.ex2.exchange.actor.{OrderGateway, OrderLogger, OrderLoggerStage}
 import meetup.streams.ex2.exchange.dal.OrderDao
 import meetup.streams.ex2.exchange.om.{ExecutedQuantity, _}
+import meetup.streams.ex2.exchange.stages.{OrderGateway, OrderLoggerStage, RandomOrderSource}
 import org.reactivestreams.Publisher
 
 import scala.collection.immutable.Iterable
@@ -28,7 +28,6 @@ object Common {
   implicit val materializer: ActorMaterializer = ActorMaterializer()
 
   val orderDao: OrderDao = Config.injector.getInstance(classOf[OrderDao])
-  val orderLogger = Props(classOf[OrderLogger], orderDao)
   val orderLoggerStage = new OrderLoggerStage(orderDao)
 
   val orderGateway: ActorRef = system.actorOf(Props[OrderGateway])
@@ -37,12 +36,13 @@ object Common {
 
 object StockExchangeGraphPool extends App {
   val workers = 5
+  val orderSource = new RandomOrderSource(100)
 
   val g = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
     import akka.stream.scaladsl.GraphDSL.Implicits._
     val bcast = b.add(Balance[PartialFills](workers))
 
-    Source.fromPublisher(gatewayPublisher)
+    Source.fromGraph(orderSource)
       .via(OrderIdGenerator())
       .via(OrderPersistence(orderDao))
       .via(OrderProcessor())
@@ -51,11 +51,10 @@ object StockExchangeGraphPool extends App {
     for (i <- 0 until workers)
       bcast.out(i) ~> Sink.fromGraph(orderLoggerStage).named(s"ol-$i")
 
-    ClosedShape // will throw an exception if it is not really closed graph
+    ClosedShape
   })
-  g.run()
 
-  1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
+  g.run()
 }
 
 object StockExchangeGraphMat extends App {
