@@ -18,5 +18,7 @@ libraryDependencies ++= Seq(
   "com.google.inject" % "guice" % "4.0",
   "cloud.drdrdr" %% "oauth-headers" % "0.3",
   loggingScala,
-  loggingLogback
+  loggingLogback,
+  "org.scalatest" %% "scalatest" % "3.0.4" % "test",
+  "com.typesafe.akka" % "akka-stream-testkit_2.12" % "2.5.6" % "test"
 )
