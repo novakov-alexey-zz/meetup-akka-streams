@@ -22,12 +22,18 @@ class StockExchangeTest extends FlatSpec with Matchers {
       .run
 
     sub.request(1)
-    pub.sendNext(OrderSourceStub.generateRandomOrder)
+    val order = OrderSourceStub.generateRandomOrder
+    pub.sendNext(order)
 
     sub.expectNextPF {
-      case PartialFills(l) => l.length should be(3)
+      case PartialFills(l) =>
+        l.length should be(3)
+        l.head.orderId should ===(order.orderId)
+
       case m => fail(s"expected PartialFills element, but found $m")
     }
+    pub.sendComplete()
+    sub.expectComplete()
   }
 
   private def getOrderDaoStub = new OrderDao {
