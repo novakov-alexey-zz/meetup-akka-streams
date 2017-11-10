@@ -15,7 +15,7 @@ class StockExchangeTest extends FlatSpec with Matchers {
   it should "sink 3 ExecutedQuantity" in {
     val (pub, sub) = TestSource.probe[Order]
       .via(OrderIdGenerator())
-      .via(OrderPersistence(getOrderDaoStub))
+      .via(OrderPersistence(orderDaoStub))
       .via(OrderProcessor())
       .via(OrderExecutor())
       .toMat(TestSink.probe[PartialFills])(Keep.both)
@@ -36,7 +36,7 @@ class StockExchangeTest extends FlatSpec with Matchers {
     sub.expectComplete()
   }
 
-  private def getOrderDaoStub = new OrderDao {
+  private def orderDaoStub = new OrderDao {
     override def saveOrder(order: Order): Unit = ()
 
     override def insertExecution(execution: Execution): Unit = ()

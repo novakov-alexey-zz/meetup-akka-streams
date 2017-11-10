@@ -30,8 +30,15 @@ object Main extends App {
     response.status match {
       case OK =>
         // Stream begins
-        response.entity.dataBytes // Source
-          .scan("")((acc, curr) => if (acc.contains("\r\n")) curr.utf8String else acc + curr.utf8String)
+
+        // Source
+        response.entity.dataBytes
+          .scan("")((acc, curr) =>
+            // if accumulator contains line breaks, then we stop line aggregation and passing current string to initiate new aggregation
+            if (acc.contains("\r\n")) curr.utf8String
+            // we continue accumulate what is passed
+            else acc + curr.utf8String
+          )
           .filter(s =>
             s.trim.nonEmpty && s.contains("\r\n")
           )
@@ -40,6 +47,7 @@ object Main extends App {
             case Success(tweet) => println("----\n" + tweet.text)
             case Failure(e) => println("-----\n" + e.getMessage)
           }
+
       // Stream ends
       case _ => println(response.entity.dataBytes.runForeach(_.utf8String))
     }
