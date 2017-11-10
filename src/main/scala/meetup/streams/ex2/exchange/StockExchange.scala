@@ -28,10 +28,10 @@ object Common {
   implicit val materializer: ActorMaterializer = ActorMaterializer()
 
   val orderDao: OrderDao = Config.injector.getInstance(classOf[OrderDao])
-  val orderLoggerStage = new OrderLoggerStage(orderDao)
+  val orderLogger = new OrderLoggerStage(orderDao)
 
   val orderGateway: ActorRef = system.actorOf(Props[OrderGateway])
-  val gatewayPublisher: Publisher[Order] = ActorPublisher[Order](orderGateway)
+  val orderPublisher: Publisher[Order] = ActorPublisher[Order](orderGateway)
 }
 
 object StockExchangeGraphPool extends App {
@@ -40,16 +40,16 @@ object StockExchangeGraphPool extends App {
 
   val g = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
     import akka.stream.scaladsl.GraphDSL.Implicits._
-    val bcast = b.add(Balance[PartialFills](workers))
+    val balancer = b.add(Balance[PartialFills](workers))
 
     Source.fromGraph(orderSource)
       .via(OrderIdGenerator())
       .via(OrderPersistence(orderDao))
       .via(OrderProcessor())
-      .via(OrderExecutor()) ~> bcast.in
+      .via(OrderExecutor()) ~> balancer.in
 
     for (i <- 0 until workers)
-      bcast.out(i) ~> Sink.fromGraph(orderLoggerStage).named(s"ol-$i")
+      balancer.out(i) ~> Sink.fromGraph(orderLogger).named(s"logger-$i")
 
     ClosedShape
   })
@@ -58,7 +58,7 @@ object StockExchangeGraphPool extends App {
 }
 
 object StockExchangeGraphMat extends App {
-  val source = Source.fromPublisher(gatewayPublisher)
+  val source = Source.fromPublisher(orderPublisher)
     .via(OrderIdGenerator())
     .via(OrderPersistence(orderDao))
     .via(OrderProcessor())
@@ -66,16 +66,16 @@ object StockExchangeGraphMat extends App {
 
   val concatFlow = Flow[PartialFills].mapConcat(_.seq.toList)
   val printDate = Sink.fold[String, ExecutedQuantity]("")((s, eq) => s + eq.executionDate + " ")
-  val logOrder = Sink.fromGraph(orderLoggerStage)
+  val logOrder = Sink.fromGraph(orderLogger)
 
   val (dates, actor) = RunnableGraph.fromGraph(GraphDSL.create(printDate, logOrder)((_, _)) { implicit builder =>
     (pDate, lOrder) =>
       import akka.stream.scaladsl.GraphDSL.Implicits._
-      val broadcast = builder.add(Broadcast[PartialFills](2))
+      val bcast = builder.add(Broadcast[PartialFills](2))
 
-      source ~> broadcast.in
-      broadcast.out(0) ~> concatFlow ~> pDate // replace with fold of string
-      broadcast.out(1) ~> lOrder
+      source ~> bcast.in
+      bcast.out(0) ~> concatFlow ~> pDate // replace with fold of string
+      bcast.out(1) ~> lOrder
       ClosedShape
   }).run
 
@@ -88,7 +88,7 @@ object StockExchangeMat extends App with StrictLogging {
   val count = Flow[PartialFills].map(_.seq.length)
   val sumSink = Sink.fold[Int, Int](0)(_ + _)
 
-  val sum = Source.fromPublisher(gatewayPublisher)
+  val sum = Source.fromPublisher(orderPublisher)
     //OrderSourceStub()
     .via(OrderIdGenerator())
     .via(OrderPersistence(orderDao))
@@ -109,7 +109,7 @@ object StockExchangeGraph extends App {
     import akka.stream.scaladsl.GraphDSL.Implicits._
     val bcast = b.add(Broadcast[PartialFills](2))
 
-    Source.fromPublisher(gatewayPublisher)
+    Source.fromPublisher(orderPublisher)
       .via(OrderIdGenerator())
       .via(OrderPersistence(orderDao))
       .via(OrderProcessor())
@@ -117,7 +117,7 @@ object StockExchangeGraph extends App {
 
     val concat = Flow[PartialFills].mapConcat(_.seq.toList)
     val printDate = Sink.foreach[ExecutedQuantity](eq => println(eq.executionDate))
-    val logOrder = Sink.fromGraph(orderLoggerStage)
+    val logOrder = Sink.fromGraph(orderLogger)
 
     bcast.out(0) ~> concat ~> printDate
     bcast.out(1) ~> logOrder
@@ -130,13 +130,13 @@ object StockExchangeGraph extends App {
 
 object StockExchange extends App {
   //OrderSourceStub()
-  Source.fromPublisher(gatewayPublisher)
+  Source.fromPublisher(orderPublisher)
     .via(OrderIdGenerator())
     .via(OrderPersistence(orderDao))
     .via(OrderProcessor())
     .via(OrderExecutor())
     //.throttle(1, 1.second, 1, ThrottleMode.shaping)
-    .runWith(Sink.fromGraph(orderLoggerStage))
+    .runWith(Sink.fromGraph(orderLogger))
 
   // send orders to publisher stage
   1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
