@@ -13,6 +13,7 @@ class StockExchangeTest extends FlatSpec with Matchers {
   implicit val materializer: ActorMaterializer = ActorMaterializer()
 
   it should "sink 3 ExecutedQuantity" in {
+    //given
     val (pub, sub) = TestSource.probe[Order]
       .via(OrderIdGenerator())
       .via(OrderPersistence(orderDaoStub))
@@ -21,17 +22,31 @@ class StockExchangeTest extends FlatSpec with Matchers {
       .toMat(TestSink.probe[PartialFills])(Keep.both)
       .run
 
+    //when
     sub.request(1)
     val order = OrderSourceStub.generateRandomOrder
     pub.sendNext(order)
 
-    sub.expectNextPF {
-      case PartialFills(l) =>
-        l.length should be(3)
-        l.head.orderId should ===(order.orderId)
+    //then
 
-      case m => fail(s"expected PartialFills element, but found $m")
+    def checkOrderIdGreaterThan(lastOrderId: Long) = {
+      sub.expectNextPF {
+        case PartialFills(l) =>
+          l.length should be(3)
+          l.head.orderId should be > lastOrderId
+          l.head.orderId
+
+        case m => fail(s"expected PartialFills element, but found $m")
+      }
     }
+
+    val lastOrderId = checkOrderIdGreaterThan(order.orderId)
+
+    //when
+    sub.request(1)
+    pub.sendNext(order)
+    checkOrderIdGreaterThan(lastOrderId)
+
     pub.sendComplete()
     sub.expectComplete()
   }

@@ -17,8 +17,11 @@ libraryDependencies ++= Seq(
   "org.scalikejdbc" %% "scalikejdbc" % "3.1.0",
   "com.google.inject" % "guice" % "4.0",
   "cloud.drdrdr" %% "oauth-headers" % "0.3",
+  "org.typelevel" %% "cats-core" % "1.0.0-RC1",
   loggingScala,
   loggingLogback,
   "org.scalatest" %% "scalatest" % "3.0.4" % "test",
   "com.typesafe.akka" % "akka-stream-testkit_2.12" % "2.5.6" % "test"
 )
+
+scalacOptions += "-Ypartial-unification"
