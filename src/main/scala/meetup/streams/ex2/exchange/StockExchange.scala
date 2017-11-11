@@ -58,30 +58,37 @@ object StockExchangeGraphPool extends App {
 }
 
 object StockExchangeGraphMat extends App {
+  // Source
   val source = Source.fromPublisher(orderPublisher)
     .via(OrderIdGenerator())
     .via(OrderPersistence(orderDao))
     .via(OrderProcessor())
     .via(OrderExecutor())
 
+  // Flow
   val concatFlow = Flow[PartialFills].mapConcat(_.seq.toList)
-  val printDate = Sink.fold[String, ExecutedQuantity]("")((s, eq) => s + eq.executionDate + " ")
+
+  // Sinks
+  val foldQuantity = Sink.fold[Long, ExecutedQuantity](0)((s, eq) => s + eq.quantity)
   val logOrder = Sink.fromGraph(orderLogger)
 
-  val (dates, actor) = RunnableGraph.fromGraph(GraphDSL.create(printDate, logOrder)((_, _)) { implicit builder =>
-    (pDate, lOrder) =>
+  val (quantity, _) = RunnableGraph.fromGraph(GraphDSL.create(foldQuantity, logOrder)((_, _)) { implicit builder =>
+    (console, persistence) =>
       import akka.stream.scaladsl.GraphDSL.Implicits._
+
       val bcast = builder.add(Broadcast[PartialFills](2))
 
+      // Graph
       source ~> bcast.in
-      bcast.out(0) ~> concatFlow ~> pDate // replace with fold of string
-      bcast.out(1) ~> lOrder
+      bcast.out(0) ~> concatFlow ~> console // replace with fold of string
+      bcast.out(1) ~> persistence
+
       ClosedShape
   }).run
 
   1 to 1000 foreach { _ => orderGateway ! generateRandomOrder }
 
-  dates.foreach(r => println(s"Done >>>>> \n$r"))
+  quantity.foreach(r => println(s"Done >>>>> \n traded quantity: $r"))
 }
 
 object StockExchangeMat extends App with StrictLogging {
@@ -116,11 +123,12 @@ object StockExchangeGraph extends App {
       .via(OrderExecutor()) ~> bcast.in
 
     val concat = Flow[PartialFills].mapConcat(_.seq.toList)
-    val printDate = Sink.foreach[ExecutedQuantity](eq => println(eq.executionDate))
-    val logOrder = Sink.fromGraph(orderLogger)
+    val console = Sink.foreach[ExecutedQuantity](eq => println(eq.executionDate))
+    val persistence = Sink.fromGraph(orderLogger)
 
-    bcast.out(0) ~> concat ~> printDate
-    bcast.out(1) ~> logOrder
+    bcast.out(0) ~> concat ~> console
+    bcast.out(1) ~> persistence
+
     ClosedShape // will throw an exception if it is not really closed graph
   })
   g.run()
@@ -171,13 +179,15 @@ object OrderPersistence {
 }
 
 object OrderIdGenerator {
-  private var seqNo: Long = 0
+  def apply(): Flow[Order, PreparedOrder, NotUsed] = {
+    var seqNo: Long = 0
 
-  def apply(): Flow[Order, PreparedOrder, NotUsed] = Flow.fromFunction(o => PreparedOrder(o, nextSeqNo()))
+    def nextSeqNo(): Long = {
+      seqNo += 1
+      seqNo
+    }
 
-  def nextSeqNo(): Long = {
-    seqNo += 1
-    seqNo
+    Flow.fromFunction(o => PreparedOrder(o, nextSeqNo()))
   }
 }
 
