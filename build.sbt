@@ -8,9 +8,10 @@ val scalaLoggingVersion = "3.7.2"
 val logbackVersion = "1.2.3"
 val loggingScala = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingVersion
 val loggingLogback = "ch.qos.logback" % "logback-classic" % logbackVersion
+val akkaStreamsV = "2.5.6"
 
 libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-stream" % "2.5.6",
+  "com.typesafe.akka" %% "akka-stream" % akkaStreamsV,
   "com.typesafe.akka" %% "akka-http" % "10.0.10",
   "org.json4s" %% "json4s-native" % "3.5.0",
   "mysql" % "mysql-connector-java" % "5.1.16",
@@ -21,7 +22,11 @@ libraryDependencies ++= Seq(
   loggingScala,
   loggingLogback,
   "org.scalatest" %% "scalatest" % "3.0.4" % "test",
-  "com.typesafe.akka" % "akka-stream-testkit_2.12" % "2.5.6" % "test"
+  "com.typesafe.akka" % "akka-stream-testkit_2.12" % akkaStreamsV % "test"
 )
 
 scalacOptions += "-Ypartial-unification"
+
+javaOptions in run += "-Xmx1G"
+javaOptions in run += "-Xms1G"
+fork in run := true
