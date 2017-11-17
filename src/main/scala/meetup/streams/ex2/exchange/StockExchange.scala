@@ -40,16 +40,21 @@ object StockExchangeGraphPool extends App {
 
   val g = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
     import akka.stream.scaladsl.GraphDSL.Implicits._
+    val bcast = b.add(Broadcast[PreparedOrder](2))
     val balancer = b.add(Balance[PartialFills](workers))
 
-    Source.fromGraph(orderSource)
-      .via(OrderIdGenerator())
-      .via(OrderPersistence(orderDao))
-      .via(OrderProcessor())
-      .via(OrderExecutor()) ~> balancer.in
+    val S = b.add(Source.fromGraph(orderSource))
+    val IdGen = b.add(OrderIdGenerator())
+    val A = b.add(OrderPersistence(orderDao).to(Sink.ignore))
+    val B = b.add(OrderProcessor2())
+    val C = b.add(OrderExecutor())
+
+    S ~> IdGen ~> bcast
+                  bcast ~> A
+                  bcast ~> B ~> C ~> balancer
 
     for (i <- 0 until workers)
-      balancer.out(i) ~> Sink.fromGraph(orderLogger).named(s"logger-$i")
+      balancer ~> b.add(Sink.fromGraph(orderLogger).named(s"logger-$i"))
 
     ClosedShape
   })
@@ -155,6 +160,11 @@ object OrderProcessor {
     Flow.fromFunction(o => ExecuteOrder(o.orderId, o.order.quantity))
 }
 
+object OrderProcessor2 {
+  def apply(): Flow[PreparedOrder, ExecuteOrder, NotUsed] =
+    Flow.fromFunction(o => ExecuteOrder(o.orderId, o.order.quantity))
+}
+
 object OrderExecutor extends StrictLogging {
   val execQuantity = 3
 
@@ -180,7 +190,7 @@ object OrderPersistence {
 
 object OrderIdGenerator {
   def apply(): Flow[Order, PreparedOrder, NotUsed] = {
-    var seqNo: Long = 0
+    var seqNo = 0L
 
     def nextSeqNo(): Long = {
       seqNo += 1
