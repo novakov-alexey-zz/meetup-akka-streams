@@ -1,12 +1,13 @@
 package meetup.streams.ex1.tweets
 
 import akka.actor.ActorSystem
+import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpHeader.ParsingResult
 import akka.http.scaladsl.model.StatusCodes.OK
 import akka.http.scaladsl.model._
 import akka.stream.scaladsl.Source
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
+import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Attributes, Supervision}
 import akka.util.ByteString
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
@@ -56,15 +57,15 @@ object TweetsFilter extends App {
           .filter(_.contains("\r\n")).async
           .map(json => parse(json).extract[Tweet].text)
 //          .log("tweet", t => t.take(20) + "...")
-          //          .withAttributes(Attributes.logLevels(onElement = Logging.InfoLevel))
+//          .withAttributes(Attributes.logLevels(onElement = Logging.InfoLevel))
           .scan(Map.empty[String, Int]) {
             (acc, text) => {
               val wc = tweetWordCount(text)
-              ListMap((acc combine wc).toSeq.sortBy(_._2)(Ordering[Int].reverse).take(uniqueBuckets): _*)
+              ListMap((acc |+| wc).toSeq.sortBy(- _._2).take(uniqueBuckets): _*)
             }
           }
           .runForeach { wc =>
-            val stats = wc.take(topCount).map(a => a._1 + ":" + a._2).mkString("  ")
+            val stats = wc.take(topCount).map{case (k, v) => k + ":" + v}.mkString("  ")
             print("\r" + stats)
           }
 
@@ -74,11 +75,11 @@ object TweetsFilter extends App {
 
   private def tweetWordCount(text: String): Map[String, Int] = {
     text.split(" ")
-      .filter(s => s.nonEmpty && s.matches("\\w+"))
-      .map(_.toLowerCase)
+      .filter(s => s.trim.nonEmpty && s.matches("\\w+"))
+      .map(_.toLowerCase.trim)
       .filterNot(stopWords.contains)
       .foldLeft(Map.empty[String, Int]) {
-        (count, word) => count + (word -> (count.getOrElse(word, 0) + 1))
+        (count, word) => count |+| Map(word -> 1)
       }
   }
 
