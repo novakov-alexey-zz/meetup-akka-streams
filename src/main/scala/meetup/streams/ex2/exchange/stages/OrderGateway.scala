@@ -19,6 +19,7 @@ class OrderGateway extends ActorPublisher[Order] {
   override def receive = {
     case o: Order =>
       queue.enqueue(o)
+      log.warning(s"Queue size: ${queue.length}")
       publishIfNeeded()
     case Request(cnt) =>
       publishIfNeeded()
@@ -42,7 +43,7 @@ class OrderGateway extends ActorPublisher[Order] {
 
 class RandomOrderSource(limit: Int) extends GraphStage[SourceShape[Order]] with StrictLogging {
   private val out = Outlet[Order]("RandomOrderSource.out")
-  val shape = SourceShape.of(out)
+  val shape: SourceShape[Order] = SourceShape.of(out)
 
   override def createLogic(inheritedAttributes: Attributes) = new GraphStageLogic(shape) {
     var count = 0
