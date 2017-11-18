@@ -1,14 +1,14 @@
 package meetup.streams.ex1.tweets
 
+import java.util.concurrent.TimeoutException
+
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpHeader.ParsingResult
 import akka.http.scaladsl.model.StatusCodes.OK
 import akka.http.scaladsl.model._
-import akka.stream.scaladsl.Source
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Attributes, Supervision}
-import akka.util.ByteString
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import meetup.streams.ex1.tweets.om.Tweet
@@ -17,20 +17,24 @@ import org.json4s.native.JsonMethods._
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 object TweetsFilter extends App {
+  // json
   implicit val formats: DefaultFormats.type = DefaultFormats
-  implicit val system: ActorSystem = ActorSystem()
 
-  val decider: Supervision.Decider = _ => Supervision.Resume
+  // akka
+  implicit val system: ActorSystem = ActorSystem()
+  val decider: Supervision.Decider = {
+    case _: TimeoutException => Supervision.Restart // also, need to re-connect as per Twitter API spec
+    case _ => Supervision.Resume
+  }
   implicit val materializer: ActorMaterializer = ActorMaterializer(ActorMaterializerSettings(system)
     .withSupervisionStrategy(decider))
 
   val conf = ConfigFactory.load()
-  val params = Map("track" -> "USA,Germany,Ukraine")
+  val params = Map("track" -> "Twitter")
 
-  val oAuthHeader = OAuthHeader(conf, params)
-  val httpRequest: HttpRequest = createHttpRequest(oAuthHeader, Uri(conf.getString("twitter.url")))
   val stopWords = Set("rt", "the", "of", "with", "for", "from", "on", "at", "to", "in", "been", "is", "be", "was", "la",
     "were", "will", "a", "el", "that", "then", "than", "you", "e", "and", "or", "within", "without", "an", "que", "we",
     "se", "are", "must", "should", "have", "has", "had", "this", "all", "our", "y", "o", "i", "una", "by", "com", "las",
@@ -39,6 +43,9 @@ object TweetsFilter extends App {
     "muito", "cmg", "mulher", "con", "there", "so", "por", "now", "un", "having", "it", "when", "what", "where", "does",
     "they", "about", "del", "but", "loco", "sobre", "their", "over", "some", "get", "only", "tu", "essa", "if", "would",
     "q", "lo", "te", "can", "te", "up", "vale", "same", "last", "u", "r", "x")
+
+  val oAuthHeader = OAuthHeader(conf, params)
+  val httpRequest = createHttpRequest(oAuthHeader, Uri(conf.getString("twitter.url")))
   val uniqueBuckets = 500
   val topCount = 15
 
@@ -47,25 +54,28 @@ object TweetsFilter extends App {
   response.foreach { resp =>
     resp.status match {
       case OK =>
-        val source: Source[ByteString, Any] = resp.entity.withoutSizeLimit().dataBytes
+        val source = resp.entity.withoutSizeLimit().dataBytes
 
         source
+          .idleTimeout(90 seconds)
           .scan("")((acc, curr) =>
             if (acc.contains("\r\n")) curr.utf8String
             else acc + curr.utf8String
           )
           .filter(_.contains("\r\n")).async
-          .map(json => parse(json).extract[Tweet].text)
-//          .log("tweet", t => t.take(20) + "...")
-//          .withAttributes(Attributes.logLevels(onElement = Logging.InfoLevel))
+          .map(json => parse(json).extract[Tweet])
+          .log("created at", _.created_at)
+          .withAttributes(Attributes.logLevels(Logging.DebugLevel))
+          .map(_.text)
+          .log("tweet", t => t.take(20) + "...")
           .scan(Map.empty[String, Int]) {
             (acc, text) => {
               val wc = tweetWordCount(text)
-              ListMap((acc |+| wc).toSeq.sortBy(- _._2).take(uniqueBuckets): _*)
+              ListMap((acc |+| wc).toSeq.sortBy(-_._2).take(uniqueBuckets): _*)
             }
           }
           .runForeach { wc =>
-            val stats = wc.take(topCount).map{case (k, v) => k + ":" + v}.mkString("  ")
+            val stats = wc.take(topCount).map { case (k, v) => s"$k:$v" }.mkString("  ")
             print("\r" + stats)
           }
 
@@ -106,7 +116,7 @@ object TweetsFilter extends App {
       headers = httpHeaders,
       entity = HttpEntity(
         contentType = ContentType(MediaTypes.`application/x-www-form-urlencoded`, HttpCharsets.`UTF-8`),
-        string = params.map { case (k, v) => k + "=" + v }.mkString(",")
+        string = params.map { case (k, v) => s"$k=$v" }.mkString(",")
       ).withoutSizeLimit()
     )
   }
