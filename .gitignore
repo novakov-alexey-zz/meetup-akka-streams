@@ -12,4 +12,4 @@ project/plugins/project/
 .cache
 .lib/
 .idea
-resources/reference.conf
+reference.conf
