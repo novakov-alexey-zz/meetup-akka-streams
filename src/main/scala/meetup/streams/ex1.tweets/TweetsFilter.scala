@@ -11,26 +11,32 @@ import akka.http.scaladsl.model._
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Attributes, Supervision}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
+import com.typesafe.scalalogging.StrictLogging
 import meetup.streams.ex1.tweets.om.Tweet
 import org.json4s._
 import org.json4s.native.JsonMethods._
 
-import scala.collection.immutable.ListMap
+import scala.collection.immutable._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
-object TweetsFilter extends App {
+object TweetsFilter extends App with StrictLogging {
   // json
   implicit val formats: DefaultFormats.type = DefaultFormats
 
   // akka
   implicit val system: ActorSystem = ActorSystem()
+
+  // also, need to re-connect (i.e. resend http request again upon disconnect) as per Twitter API spec
   val decider: Supervision.Decider = {
-    case _: TimeoutException => Supervision.Restart // also, need to re-connect as per Twitter API spec
-    case _ => Supervision.Resume
+    case _: TimeoutException => Supervision.Restart
+    case NonFatal(e) =>
+      logger.debug("Stream failed with " + e.getMessage + ", going to resume")
+      Supervision.Resume
   }
-  implicit val materializer: ActorMaterializer = ActorMaterializer(ActorMaterializerSettings(system)
-    .withSupervisionStrategy(decider))
+
+  implicit val materializer = ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
 
   val conf = ConfigFactory.load()
   val params = Map("track" -> "Twitter")
@@ -63,9 +69,10 @@ object TweetsFilter extends App {
             else acc + curr.utf8String
           )
           .filter(_.contains("\r\n")).async
+          .log("json", s => s)
           .map(json => parse(json).extract[Tweet])
           .log("created at", _.created_at)
-          .withAttributes(Attributes.logLevels(Logging.DebugLevel))
+          //.mapConcat[String](_.entities.hashtags.map(_.text).to[Iterable]) // hashtags
           .map(_.text)
           .log("tweet", t => t.take(20) + "...")
           .scan(Map.empty[String, Int]) {
@@ -79,7 +86,7 @@ object TweetsFilter extends App {
             print("\r" + stats)
           }
 
-      case _ => resp.entity.dataBytes.runForeach(bs => println(bs.utf8String))
+      case code => resp.entity.dataBytes.runForeach(bs => println(s"Unexpected status code: $code, " + bs.utf8String))
     }
   }
 

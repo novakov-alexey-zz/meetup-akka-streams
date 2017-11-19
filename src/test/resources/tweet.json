@@ -1,0 +1,306 @@
+{
+  "created_at": "Sun Nov 19 13:23:08 +0000 2017",
+  "id": 932237809808805889,
+  "id_str": "932237809808805889",
+  "text": "RT @premierleague: Alvaro Morata's been involved in 12 goals in his first 11 #PL games (8 goals, 4 assists), more than any other\u2026 ",
+  "source": "\u003ca href=\"http:\/\/twitter.com\/download\/android\" rel=\"nofollow\"\u003eTwitter for Android\u003c\/a\u003e",
+  "truncated": false,
+  "in_reply_to_status_id": null,
+  "in_reply_to_status_id_str": null,
+  "in_reply_to_user_id": null,
+  "in_reply_to_user_id_str": null,
+  "in_reply_to_screen_name": null,
+  "user": {
+    "id": 438235791,
+    "id_str": "438235791",
+    "name": "St. REGIS",
+    "screen_name": "JUSTICEKECHI",
+    "location": "Yaba",
+    "url": null,
+    "description": "A cool guy who wants to have a f'ing nice time. And make lots of friends in the process.",
+    "translator_type": "none",
+    "protected": false,
+    "verified": false,
+    "followers_count": 1004,
+    "friends_count": 1732,
+    "listed_count": 14,
+    "favourites_count": 2668,
+    "statuses_count": 71275,
+    "created_at": "Fri Dec 16 10:33:11 +0000 2011",
+    "utc_offset": null,
+    "time_zone": null,
+    "geo_enabled": false,
+    "lang": "en",
+    "contributors_enabled": false,
+    "is_translator": false,
+    "profile_background_color": "C0DEED",
+    "profile_background_image_url": "http:\/\/abs.twimg.com\/images\/themes\/theme1\/bg.png",
+    "profile_background_image_url_https": "https:\/\/abs.twimg.com\/images\/themes\/theme1\/bg.png",
+    "profile_background_tile": false,
+    "profile_link_color": "1DA1F2",
+    "profile_sidebar_border_color": "C0DEED",
+    "profile_sidebar_fill_color": "DDEEF6",
+    "profile_text_color": "333333",
+    "profile_use_background_image": true,
+    "profile_image_url": "http:\/\/pbs.twimg.com\/profile_images\/807603338636390400\/L9T73txn_normal.jpg",
+    "profile_image_url_https": "https:\/\/pbs.twimg.com\/profile_images\/807603338636390400\/L9T73txn_normal.jpg",
+    "profile_banner_url": "https:\/\/pbs.twimg.com\/profile_banners\/438235791\/1448484500",
+    "default_profile": true,
+    "default_profile_image": false,
+    "following": null,
+    "follow_request_sent": null,
+    "notifications": null
+  },
+  "geo": null,
+  "coordinates": null,
+  "place": null,
+  "contributors": null,
+  "retweeted_status": {
+    "created_at": "Sun Nov 19 08:23:04 +0000 2017",
+    "id": 932162294968184832,
+    "id_str": "932162294968184832",
+    "text": "Alvaro Morata's been involved in 12 goals in his first 11 #PL games (8 goals, 4 assists), more than any other\u2026 https:\/\/t.co\/c7e86padbo",
+    "display_text_range": [
+      0,
+      140
+    ],
+    "source": "\u003ca href=\"http:\/\/www.spredfast.com\" rel=\"nofollow\"\u003eSpredfast app\u003c\/a\u003e",
+    "truncated": true,
+    "in_reply_to_status_id": null,
+    "in_reply_to_status_id_str": null,
+    "in_reply_to_user_id": null,
+    "in_reply_to_user_id_str": null,
+    "in_reply_to_screen_name": null,
+    "user": {
+      "id": 343627165,
+      "id_str": "343627165",
+      "name": "Premier League",
+      "screen_name": "premierleague",
+      "location": null,
+      "url": "http:\/\/www.premierleague.com",
+      "description": "Official Twitter account of the Premier League. Download the 2017\/18 fixtures to your calendar now: http:\/\/preml.ge\/schedule",
+      "translator_type": "none",
+      "protected": false,
+      "verified": true,
+      "followers_count": 16444050,
+      "friends_count": 77,
+      "listed_count": 22135,
+      "favourites_count": 854,
+      "statuses_count": 84851,
+      "created_at": "Wed Jul 27 21:09:32 +0000 2011",
+      "utc_offset": 0,
+      "time_zone": "Europe\/London",
+      "geo_enabled": true,
+      "lang": "en",
+      "contributors_enabled": false,
+      "is_translator": false,
+      "profile_background_color": "050528",
+      "profile_background_image_url": "http:\/\/pbs.twimg.com\/profile_background_images\/378800000161701914\/r0W2wiQt.jpeg",
+      "profile_background_image_url_https": "https:\/\/pbs.twimg.com\/profile_background_images\/378800000161701914\/r0W2wiQt.jpeg",
+      "profile_background_tile": false,
+      "profile_link_color": "93A644",
+      "profile_sidebar_border_color": "FFFFFF",
+      "profile_sidebar_fill_color": "171838",
+      "profile_text_color": "FFFFFF",
+      "profile_use_background_image": false,
+      "profile_image_url": "http:\/\/pbs.twimg.com\/profile_images\/912617623233470465\/IeSVPapf_normal.jpg",
+      "profile_image_url_https": "https:\/\/pbs.twimg.com\/profile_images\/912617623233470465\/IeSVPapf_normal.jpg",
+      "profile_banner_url": "https:\/\/pbs.twimg.com\/profile_banners\/343627165\/1510568050",
+      "default_profile": false,
+      "default_profile_image": false,
+      "following": null,
+      "follow_request_sent": null,
+      "notifications": null
+    },
+    "geo": null,
+    "coordinates": null,
+    "place": null,
+    "contributors": null,
+    "is_quote_status": false,
+    "extended_tweet": {
+      "full_text": "Alvaro Morata's been involved in 12 goals in his first 11 #PL games (8 goals, 4 assists), more than any other @ChelseaFC player in the competition\u2019s history\n\n#WBACHE https:\/\/t.co\/xDZR967x6E",
+      "display_text_range": [
+        0,
+        165
+      ],
+      "entities": {
+        "hashtags": [
+          {
+            "text": "PL",
+            "indices": [
+              58,
+              61
+            ]
+          },
+          {
+            "text": "WBACHE",
+            "indices": [
+              158,
+              165
+            ]
+          }
+        ],
+        "urls": [],
+        "user_mentions": [
+          {
+            "screen_name": "ChelseaFC",
+            "name": "Chelsea FC",
+            "id": 22910295,
+            "id_str": "22910295",
+            "indices": [
+              110,
+              120
+            ]
+          }
+        ],
+        "symbols": [],
+        "media": [
+          {
+            "id": 932162291537186816,
+            "id_str": "932162291537186816",
+            "indices": [
+              166,
+              189
+            ],
+            "media_url": "http:\/\/pbs.twimg.com\/media\/DO-0qlQWkAApBGp.jpg",
+            "media_url_https": "https:\/\/pbs.twimg.com\/media\/DO-0qlQWkAApBGp.jpg",
+            "url": "https:\/\/t.co\/xDZR967x6E",
+            "display_url": "pic.twitter.com\/xDZR967x6E",
+            "expanded_url": "https:\/\/twitter.com\/premierleague\/status\/932162294968184832\/photo\/1",
+            "type": "photo",
+            "sizes": {
+              "small": {
+                "w": 680,
+                "h": 534,
+                "resize": "fit"
+              },
+              "thumb": {
+                "w": 150,
+                "h": 150,
+                "resize": "crop"
+              },
+              "large": {
+                "w": 2047,
+                "h": 1608,
+                "resize": "fit"
+              },
+              "medium": {
+                "w": 1200,
+                "h": 943,
+                "resize": "fit"
+              }
+            }
+          }
+        ]
+      },
+      "extended_entities": {
+        "media": [
+          {
+            "id": 932162291537186816,
+            "id_str": "932162291537186816",
+            "indices": [
+              166,
+              189
+            ],
+            "media_url": "http:\/\/pbs.twimg.com\/media\/DO-0qlQWkAApBGp.jpg",
+            "media_url_https": "https:\/\/pbs.twimg.com\/media\/DO-0qlQWkAApBGp.jpg",
+            "url": "https:\/\/t.co\/xDZR967x6E",
+            "display_url": "pic.twitter.com\/xDZR967x6E",
+            "expanded_url": "https:\/\/twitter.com\/premierleague\/status\/932162294968184832\/photo\/1",
+            "type": "photo",
+            "sizes": {
+              "small": {
+                "w": 680,
+                "h": 534,
+                "resize": "fit"
+              },
+              "thumb": {
+                "w": 150,
+                "h": 150,
+                "resize": "crop"
+              },
+              "large": {
+                "w": 2047,
+                "h": 1608,
+                "resize": "fit"
+              },
+              "medium": {
+                "w": 1200,
+                "h": 943,
+                "resize": "fit"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "quote_count": 98,
+    "reply_count": 74,
+    "retweet_count": 1501,
+    "favorite_count": 4164,
+    "entities": {
+      "hashtags": [
+        {
+          "text": "PL",
+          "indices": [
+            58,
+            61
+          ]
+        }
+      ],
+      "urls": [
+        {
+          "url": "https:\/\/t.co\/c7e86padbo",
+          "expanded_url": "https:\/\/twitter.com\/i\/web\/status\/932162294968184832",
+          "display_url": "twitter.com\/i\/web\/status\/9\u2026",
+          "indices": [
+            111,
+            134
+          ]
+        }
+      ],
+      "user_mentions": [],
+      "symbols": []
+    },
+    "favorited": false,
+    "retweeted": false,
+    "possibly_sensitive": false,
+    "filter_level": "low",
+    "lang": "en"
+  },
+  "is_quote_status": false,
+  "quote_count": 0,
+  "reply_count": 0,
+  "retweet_count": 0,
+  "favorite_count": 0,
+  "entities": {
+    "hashtags": [
+      {
+        "text": "PL",
+        "indices": [
+          77,
+          80
+        ]
+      }
+    ],
+    "urls": [],
+    "user_mentions": [
+      {
+        "screen_name": "premierleague",
+        "name": "Premier League",
+        "id": 343627165,
+        "id_str": "343627165",
+        "indices": [
+          3,
+          17
+        ]
+      }
+    ],
+    "symbols": []
+  },
+  "favorited": false,
+  "retweeted": false,
+  "filter_level": "low",
+  "lang": "en",
+  "timestamp_ms": "1511097788656"
+}
