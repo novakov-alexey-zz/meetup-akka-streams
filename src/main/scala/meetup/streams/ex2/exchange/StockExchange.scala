@@ -20,9 +20,6 @@ import scala.collection.immutable.Iterable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Random
 
-/*
-Todo for Slides: finite and infinite streams
- */
 object Common {
   implicit val system: ActorSystem = ActorSystem("StockExchange")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
@@ -112,6 +109,10 @@ object StockExchangeMat extends App with StrictLogging {
 
   sum.foreach(s => logger.info(s"sum is = $s"))
   sum.failed.foreach(s => logger.error(s"something went wrong = $s"))
+  sum.onComplete(_ => {
+    logger.info("Shutdown ActorSystem")
+    system.terminate()
+  })
 
   1 to 100 foreach { _ => orderGateway ! generateRandomOrder }
 }
