@@ -20,6 +20,20 @@ import scala.collection.immutable._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
+import Params._
+
+object Params {
+  val stopWords = Set("rt", "the", "of", "with", "for", "from", "on", "at", "to", "in", "been", "is", "be", "was", "la",
+    "were", "will", "a", "el", "that", "then", "than", "you", "e", "and", "or", "within", "without", "an", "que", "we",
+    "se", "are", "must", "should", "have", "has", "had", "this", "all", "our", "y", "o", "i", "una", "by", "com", "las",
+    "no", "who", "what", "los", "su", "cu", "de", "pra", "en", "usa", "es", "as", "my", "me", "eu", "out", "us", "your",
+    "mine", "just", "da", "not", "more", "he", "para", "less", "he", "she", "do", "did", "germany", "al", "faz", "new",
+    "muito", "cmg", "mulher", "con", "there", "so", "por", "now", "un", "having", "it", "when", "what", "where", "does",
+    "they", "about", "del", "but", "loco", "sobre", "their", "over", "some", "get", "only", "tu", "essa", "if", "would",
+    "q", "lo", "te", "can", "te", "up", "vale", "same", "last", "u", "r", "x")
+
+  val requestParams = Map("track" -> "Germany,Spain,USA,Ukraine")
+}
 
 object TweetsFilter extends App with StrictLogging {
   // json
@@ -39,21 +53,13 @@ object TweetsFilter extends App with StrictLogging {
   implicit val materializer = ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
 
   val conf = ConfigFactory.load()
-  val params = Map("track" -> "Twitter")
 
-  val stopWords = Set("rt", "the", "of", "with", "for", "from", "on", "at", "to", "in", "been", "is", "be", "was", "la",
-    "were", "will", "a", "el", "that", "then", "than", "you", "e", "and", "or", "within", "without", "an", "que", "we",
-    "se", "are", "must", "should", "have", "has", "had", "this", "all", "our", "y", "o", "i", "una", "by", "com", "las",
-    "no", "who", "what", "los", "su", "cu", "de", "pra", "en", "usa", "es", "as", "my", "me", "eu", "out", "us", "your",
-    "mine", "just", "da", "not", "more", "he", "para", "less", "he", "she", "do", "did", "germany", "al", "faz", "new",
-    "muito", "cmg", "mulher", "con", "there", "so", "por", "now", "un", "having", "it", "when", "what", "where", "does",
-    "they", "about", "del", "but", "loco", "sobre", "their", "over", "some", "get", "only", "tu", "essa", "if", "would",
-    "q", "lo", "te", "can", "te", "up", "vale", "same", "last", "u", "r", "x")
-
-  val oAuthHeader = OAuthHeader(conf, params)
+  val oAuthHeader = OAuthHeader(conf, requestParams)
   val httpRequest = createHttpRequest(oAuthHeader, Uri(conf.getString("twitter.url")))
   val uniqueBuckets = 500
   val topCount = 15
+  val idleDuration = 90 seconds
+  val docDelimiter = "\r\n"
 
   val response = Http().singleRequest(httpRequest)
 
@@ -63,12 +69,12 @@ object TweetsFilter extends App with StrictLogging {
         val source = resp.entity.withoutSizeLimit().dataBytes
 
         source
-          .idleTimeout(90 seconds)
+          .idleTimeout(idleDuration)
           .scan("")((acc, curr) =>
-            if (acc.contains("\r\n")) curr.utf8String
+            if (acc.contains(docDelimiter)) curr.utf8String
             else acc + curr.utf8String
           )
-          .filter(_.contains("\r\n")).async
+          .filter(_.contains(docDelimiter)).async
           .log("json", s => s)
           .map(json => parse(json).extract[Tweet])
           .log("created at", _.created_at)
@@ -86,7 +92,7 @@ object TweetsFilter extends App with StrictLogging {
             print("\r" + stats)
           }
 
-      case code => resp.entity.dataBytes.runForeach(bs => println(s"Unexpected status code: $code, " + bs.utf8String))
+      case code => resp.entity.dataBytes.runForeach(bs => println(s"Unexpected status code: $code, ${bs.utf8String}"))
     }
   }
 
@@ -123,7 +129,7 @@ object TweetsFilter extends App with StrictLogging {
       headers = httpHeaders,
       entity = HttpEntity(
         contentType = ContentType(MediaTypes.`application/x-www-form-urlencoded`, HttpCharsets.`UTF-8`),
-        string = params.map { case (k, v) => s"$k=$v" }.mkString(",")
+        string = requestParams.map { case (k, v) => s"$k=$v" }.mkString(",")
       ).withoutSizeLimit()
     )
   }
