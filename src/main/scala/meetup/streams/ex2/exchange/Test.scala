@@ -18,7 +18,6 @@ object Test extends App {
   val sum: Future[Int] = g.run
   sum.foreach(print)
 
-
   // An example from Colin Breck article:
 
   val random = new Random
@@ -28,10 +27,12 @@ object Test extends App {
   case class Sample(currentTime: Long, nextFloat: Float)
 
   val status =
-    Source.tick(0 minute, 5 seconds, ())
+    Source
+      .tick(0 minute, 5 seconds, ())
       .map(_ => Status)
 
-  Source.tick(0 milliseconds, 1 second, ())
+  Source
+    .tick(0 milliseconds, 1 second, ())
     .map(_ => Sample(System.currentTimeMillis(), random.nextFloat()))
     .merge(status)
     .runWith(Sink.foreach(println))
