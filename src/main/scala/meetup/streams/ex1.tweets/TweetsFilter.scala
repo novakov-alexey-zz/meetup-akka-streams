@@ -11,30 +11,18 @@ import akka.http.scaladsl.model._
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Attributes, Supervision}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
+import com.typesafe.scalalogging.StrictLogging
 import meetup.streams.ex1.tweets.om.Tweet
 import org.json4s._
 import org.json4s.native.JsonMethods._
 
-import scala.collection.immutable.ListMap
+import scala.collection.immutable._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
+import Params._
 
-object TweetsFilter extends App {
-  // json
-  implicit val formats: DefaultFormats.type = DefaultFormats
-
-  // akka
-  implicit val system: ActorSystem = ActorSystem()
-  val decider: Supervision.Decider = {
-    case _: TimeoutException => Supervision.Restart // also, need to re-connect as per Twitter API spec
-    case _ => Supervision.Resume
-  }
-  implicit val materializer: ActorMaterializer = ActorMaterializer(ActorMaterializerSettings(system)
-    .withSupervisionStrategy(decider))
-
-  val conf = ConfigFactory.load()
-  val params = Map("track" -> "Twitter")
-
+object Params {
   val stopWords = Set("rt", "the", "of", "with", "for", "from", "on", "at", "to", "in", "been", "is", "be", "was", "la",
     "were", "will", "a", "el", "that", "then", "than", "you", "e", "and", "or", "within", "without", "an", "que", "we",
     "se", "are", "must", "should", "have", "has", "had", "this", "all", "our", "y", "o", "i", "una", "by", "com", "las",
@@ -44,10 +32,34 @@ object TweetsFilter extends App {
     "they", "about", "del", "but", "loco", "sobre", "their", "over", "some", "get", "only", "tu", "essa", "if", "would",
     "q", "lo", "te", "can", "te", "up", "vale", "same", "last", "u", "r", "x")
 
-  val oAuthHeader = OAuthHeader(conf, params)
+  val requestParams = Map("track" -> "Germany,Spain,USA,Ukraine")
+}
+
+object TweetsFilter extends App with StrictLogging {
+  // json
+  implicit val formats: DefaultFormats.type = DefaultFormats
+
+  // akka
+  implicit val system: ActorSystem = ActorSystem()
+
+  // also, need to re-connect (i.e. resend http request again upon disconnect) as per Twitter API spec
+  val decider: Supervision.Decider = {
+    case _: TimeoutException => Supervision.Restart
+    case NonFatal(e) =>
+      logger.debug("Stream failed with " + e.getMessage + ", going to resume")
+      Supervision.Resume
+  }
+
+  implicit val materializer = ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
+
+  val conf = ConfigFactory.load()
+
+  val oAuthHeader = OAuthHeader(conf, requestParams)
   val httpRequest = createHttpRequest(oAuthHeader, Uri(conf.getString("twitter.url")))
   val uniqueBuckets = 500
   val topCount = 15
+  val idleDuration = 90 seconds
+  val docDelimiter = "\r\n"
 
   val response = Http().singleRequest(httpRequest)
 
@@ -57,15 +69,16 @@ object TweetsFilter extends App {
         val source = resp.entity.withoutSizeLimit().dataBytes
 
         source
-          .idleTimeout(90 seconds)
+          .idleTimeout(idleDuration)
           .scan("")((acc, curr) =>
-            if (acc.contains("\r\n")) curr.utf8String
+            if (acc.contains(docDelimiter)) curr.utf8String
             else acc + curr.utf8String
           )
-          .filter(_.contains("\r\n")).async
+          .filter(_.contains(docDelimiter)).async
+          .log("json", s => s)
           .map(json => parse(json).extract[Tweet])
           .log("created at", _.created_at)
-          .withAttributes(Attributes.logLevels(Logging.DebugLevel))
+          //.mapConcat[String](_.entities.hashtags.map(_.text).to[Iterable]) // hashtags
           .map(_.text)
           .log("tweet", t => t.take(20) + "...")
           .scan(Map.empty[String, Int]) {
@@ -79,7 +92,7 @@ object TweetsFilter extends App {
             print("\r" + stats)
           }
 
-      case _ => resp.entity.dataBytes.runForeach(bs => println(bs.utf8String))
+      case code => resp.entity.dataBytes.runForeach(bs => println(s"Unexpected status code: $code, ${bs.utf8String}"))
     }
   }
 
@@ -116,7 +129,7 @@ object TweetsFilter extends App {
       headers = httpHeaders,
       entity = HttpEntity(
         contentType = ContentType(MediaTypes.`application/x-www-form-urlencoded`, HttpCharsets.`UTF-8`),
-        string = params.map { case (k, v) => s"$k=$v" }.mkString(",")
+        string = requestParams.map { case (k, v) => s"$k=$v" }.mkString(",")
       ).withoutSizeLimit()
     )
   }
