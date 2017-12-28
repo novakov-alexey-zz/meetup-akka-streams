@@ -3,15 +3,16 @@ package meetup.streams.ex1.tweets
 import java.util.concurrent.TimeoutException
 
 import akka.actor.ActorSystem
-import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpHeader.ParsingResult
 import akka.http.scaladsl.model.StatusCodes.OK
 import akka.http.scaladsl.model._
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Attributes, Supervision}
+import akka.stream.scaladsl.{RestartSource, Source}
+import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.StrictLogging
+import meetup.streams.ex1.tweets.Params._
 import meetup.streams.ex1.tweets.om.Tweet
 import org.json4s._
 import org.json4s.native.JsonMethods._
@@ -20,7 +21,6 @@ import scala.collection.immutable._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
-import Params._
 
 object Params {
   val stopWords = Set("rt", "the", "of", "with", "for", "from", "on", "at", "to", "in", "been", "is", "be", "was", "la",
@@ -33,68 +33,80 @@ object Params {
     "q", "lo", "te", "can", "te", "up", "vale", "same", "last", "u", "r", "x")
 
   val requestParams = Map("track" -> "Germany,Spain,USA,Ukraine")
+
+  val docDelimiter = "\r\n"
 }
 
-object TweetsFilter extends App with StrictLogging {
+object TweetsWordCount extends App with StrictLogging {
   // json
   implicit val formats: DefaultFormats.type = DefaultFormats
 
   // akka
-  implicit val system: ActorSystem = ActorSystem()
+  implicit val system: ActorSystem = ActorSystem("TweetsWordCount")
 
-  // also, need to re-connect (i.e. resend http request again upon disconnect) as per Twitter API spec
   val decider: Supervision.Decider = {
     case _: TimeoutException => Supervision.Restart
     case NonFatal(e) =>
-      logger.debug("Stream failed with " + e.getMessage + ", going to resume")
+      logger.error(s"Stream failed with ${e.getMessage}, going to resume")
       Supervision.Resume
   }
 
   implicit val materializer = ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
 
-  val conf = ConfigFactory.load()
-
-  val oAuthHeader = OAuthHeader(conf, requestParams)
-  val httpRequest = createHttpRequest(oAuthHeader, Uri(conf.getString("twitter.url")))
   val uniqueBuckets = 500
   val topCount = 15
   val idleDuration = 90 seconds
-  val docDelimiter = "\r\n"
 
-  val response = Http().singleRequest(httpRequest)
+  val conf = ConfigFactory.load()
+  val oAuthHeader = OAuthHeader(conf, requestParams)
+  val httpRequest = createHttpRequest(oAuthHeader, Uri(conf.getString("twitter.url")))
 
-  response.foreach { resp =>
-    resp.status match {
-      case OK =>
-        val source = resp.entity.withoutSizeLimit().dataBytes
+  val restartSource = RestartSource.withBackoff(
+    minBackoff = 3.seconds,
+    maxBackoff = 30.seconds,
+    randomFactor = 0.2 // adds 20% "noise" to vary the intervals slightly
+  ) { () =>
+    Source.fromFutureSource {
+      val response = Http().singleRequest(httpRequest)
 
-        source
-          .idleTimeout(idleDuration)
-          .scan("")((acc, curr) =>
-            if (acc.contains(docDelimiter)) curr.utf8String
-            else acc + curr.utf8String
-          )
-          .filter(_.contains(docDelimiter)).async
-          .log("json", s => s)
-          .map(json => parse(json).extract[Tweet])
-          .log("created at", _.created_at)
-          //.mapConcat[String](_.entities.hashtags.map(_.text).to[Iterable]) // hashtags
-          .map(_.text)
-          .log("tweet", t => t.take(20) + "...")
-          .scan(Map.empty[String, Int]) {
-            (acc, text) => {
-              val wc = tweetWordCount(text)
-              ListMap((acc |+| wc).toSeq.sortBy(-_._2).take(uniqueBuckets): _*)
-            }
-          }
-          .runForeach { wc =>
-            val stats = wc.take(topCount).map { case (k, v) => s"$k:$v" }.mkString("  ")
-            print("\r" + stats)
-          }
+      response.failed.foreach(t => System.err.println(s"Request has been failed with $t"))
 
-      case code => resp.entity.dataBytes.runForeach(bs => println(s"Unexpected status code: $code, ${bs.utf8String}"))
+      response.map(resp => {
+        resp.status match {
+          case OK => resp.entity.withoutSizeLimit().dataBytes
+          case code =>
+            val text = resp.entity.dataBytes.map(_.utf8String)
+            val error = s"Unexpected status code: $code, $text"
+            System.err.println(error)
+            Source.failed(new RuntimeException(error))
+        }
+      })
     }
   }
+
+  restartSource
+    .idleTimeout(idleDuration)
+    .scan("")((acc, curr) =>
+      if (acc.contains(docDelimiter)) curr.utf8String
+      else acc + curr.utf8String
+    )
+    .filter(_.contains(docDelimiter)).async
+    .log("json", s => s)
+    .map(json => parse(json).extract[Tweet])
+    .log("created at", _.created_at)
+    //.mapConcat[String](_.entities.hashtags.map(_.text).to[Iterable]) // hashtags
+    .map(_.text)
+    .log("tweet", t => t.take(20) + "...")
+    .scan(Map.empty[String, Int]) {
+      (acc, text) => {
+        val wc = tweetWordCount(text)
+        ListMap((acc |+| wc).toSeq.sortBy(-_._2).take(uniqueBuckets): _*)
+      }
+    }
+    .runForeach { wc =>
+      val stats = wc.take(topCount).map { case (k, v) => s"$k:$v" }.mkString("  ")
+      print("\r" + stats)
+    }
 
   private def tweetWordCount(text: String): Map[String, Int] = {
     text.split(" ")
@@ -105,8 +117,6 @@ object TweetsFilter extends App with StrictLogging {
         (count, word) => count |+| Map(word -> 1)
       }
   }
-
-  response.failed.foreach(System.err.println(_))
 
   /*
     See more details at twitter Streaming API
