@@ -35,6 +35,10 @@ object Params {
   val requestParams = Map("track" -> "Germany,Spain,USA,Ukraine")
 
   val docDelimiter = "\r\n"
+
+  val uniqueBuckets = 500
+  val topCount = 15
+  val idleDuration: FiniteDuration = 90 seconds
 }
 
 object TweetsWordCount extends App with StrictLogging {
@@ -52,10 +56,6 @@ object TweetsWordCount extends App with StrictLogging {
   }
 
   implicit val materializer = ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
-
-  val uniqueBuckets = 500
-  val topCount = 15
-  val idleDuration = 90 seconds
 
   val conf = ConfigFactory.load()
   val oAuthHeader = OAuthHeader(conf, requestParams)
@@ -121,7 +121,7 @@ object TweetsWordCount extends App with StrictLogging {
   /*
     See more details at twitter Streaming API
    */
-  def createHttpRequest(header: String, source: Uri): HttpRequest = {
+  private def createHttpRequest(header: String, source: Uri): HttpRequest = {
     val httpHeaders = List(
       HttpHeader.parse("Authorization", header) match {
         case ParsingResult.Ok(h, _) => Some(h)
